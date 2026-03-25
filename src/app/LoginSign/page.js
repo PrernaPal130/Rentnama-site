@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Store, UserRound } from "lucide-react";
 import { useAuthData } from "../../context/authContext";
 
-export default function AccountPage() {
+function LoginSignContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { firebaseReady, loginCustomer } = useAuthData();
@@ -191,5 +191,13 @@ export default function AccountPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function LoginSignPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginSignContent />
+    </Suspense>
   );
 }

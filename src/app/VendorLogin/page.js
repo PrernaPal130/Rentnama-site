@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -18,7 +18,7 @@ import {
   createMfaRecaptcha,
 } from "../../lib/firebase";
 
-export default function VendorLoginPage() {
+function VendorLoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { firebaseReady } = useAuthData();
@@ -320,5 +320,13 @@ export default function VendorLoginPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function VendorLoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <VendorLoginContent />
+    </Suspense>
   );
 }
