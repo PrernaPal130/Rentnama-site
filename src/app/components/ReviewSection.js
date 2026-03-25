@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 export default function ReviewsSection() {
   const reviews = [
     {
@@ -13,7 +15,7 @@ export default function ReviewsSection() {
       avatar: "https://i.pravatar.cc/40?img=2",
     },
     {
-      text: "Much needed! ❤️",
+      text: "Much needed!",
       name: "Nora",
       role: "Client Review",
       avatar: "https://i.pravatar.cc/40?img=3",
@@ -28,19 +30,21 @@ export default function ReviewsSection() {
 
   return (
     <section className="py-10">
-      <h2 className="text-2xl font-semibold mb-6 text-gray-800">Our Reviews</h2>
-      <div className="flex space-x-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-4">
-        {reviews.map((review, index) => (
+      <h2 className="mb-6 text-2xl font-semibold text-gray-800">Our Reviews</h2>
+      <div className="flex snap-x snap-mandatory space-x-4 overflow-x-auto scroll-smooth pb-4">
+        {reviews.map((review) => (
           <div
-            key={index}
-            className="min-w-[280px] max-w-sm flex-shrink-0 bg-white border rounded-2xl p-6 shadow-md snap-start"
+            key={review.name}
+            className="max-w-sm min-w-[280px] flex-shrink-0 snap-start rounded-2xl border bg-white p-6 shadow-md"
           >
-            <p className="text-gray-700 text-lg italic mb-6">“{review.text}”</p>
+            <p className="mb-6 text-lg italic text-gray-700">&quot;{review.text}&quot;</p>
             <div className="flex items-center space-x-3">
-              <img
+              <Image
                 src={review.avatar}
                 alt={review.name}
-                className="w-10 h-10 rounded-full"
+                width={40}
+                height={40}
+                className="rounded-full"
               />
               <div>
                 <p className="font-semibold text-gray-900">{review.name}</p>

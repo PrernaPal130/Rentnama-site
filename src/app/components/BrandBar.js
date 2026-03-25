@@ -1,4 +1,5 @@
 "use client";
+
 import Image from "next/image";
 
 export default function BrandBar() {
@@ -13,23 +14,29 @@ export default function BrandBar() {
     { name: "Samyakk", logo: "/samayakk.jpg" },
   ];
 
+  const repeatedGroups = Array.from({ length: 4 });
+
   return (
     <div className="relative overflow-hidden bg-[#D27F6C] py-3 border-t border-b border-gray-200">
-      {/* Auto-scrolling container */}
-      <div className="flex animate-scroll space-x-4 bg-[#D27F6C]">
-        {[...brands, ...brands].map((brand, i) => (
-          <div
-            key={i}
-            className="flex-shrink-0 w-20 h-8 sm:w-24 sm:h-10 md:w-28 md:h-12 flex items-center justify-center bg-[#D27F6C]"
-          >
-            <div className="relative w-full h-full p-1">
-              <Image
-                src={brand.logo}
-                alt={brand.name}
-                fill
-                className="object-contain"
-              />
-            </div>
+      {/* Each repeated group has the same width, so the loop resets seamlessly. */}
+      <div className="marquee-track flex w-max bg-[#D27F6C]">
+        {repeatedGroups.map((_, groupIndex) => (
+          <div key={groupIndex} className="flex flex-shrink-0 gap-4">
+            {brands.map((brand, brandIndex) => (
+              <div
+                key={`${groupIndex}-${brandIndex}`}
+                className="flex-shrink-0 w-20 h-8 sm:w-24 sm:h-10 md:w-28 md:h-12 flex items-center justify-center bg-[#D27F6C]"
+              >
+                <div className="relative w-full h-full p-1">
+                  <Image
+                    src={brand.logo}
+                    alt={brand.name}
+                    fill
+                    className="object-contain"
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         ))}
       </div>
@@ -40,14 +47,13 @@ export default function BrandBar() {
             transform: translateX(0);
           }
           100% {
-            transform: translateX(-100%);
+            transform: translateX(-25%);
           }
         }
 
-        .animate-scroll {
-          display: flex;
+        .marquee-track {
           animation: scroll 30s linear infinite;
-          width: max-content;
+          will-change: transform;
         }
       `}</style>
     </div>
