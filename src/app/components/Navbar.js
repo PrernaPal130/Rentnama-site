@@ -9,6 +9,12 @@ import { useAuthData } from "../../context/authContext";
 export default function Navbar() {
   const router = useRouter();
   const { currentUser, profile, logout } = useAuthData();
+  const isVendor = profile?.role === "vendor";
+  const accountHref = currentUser
+    ? isVendor
+      ? "/VendorDashboard"
+      : "/Account"
+    : "/LoginSign";
   const accountLabel =
     profile?.name ||
     profile?.businessName ||
@@ -46,7 +52,7 @@ export default function Navbar() {
             </Link>
 
             <Link
-              href={currentUser ? "/Account" : "/LoginSign"}
+              href={accountHref}
               className="text-sm font-medium text-white bg-[#000000]  px-2 py-2 rounded-full"
             >
               {accountLabel}
@@ -85,13 +91,20 @@ export default function Navbar() {
 
             {/* Icons */}
             <div className="flex items-center space-x-2 sm:space-x-3">
-              <Link href="/Wishlist" aria-label="Wishlist">
-                <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-black cursor-pointer" />
-              </Link>
-              <Link href="/ShoppingCart" aria-label="Shopping cart">
-                <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5 text-black cursor-pointer" />
-              </Link>
-              <Link href="/Account" aria-label="Your account">
+              {!isVendor ? (
+                <Link href="/Wishlist" aria-label="Wishlist">
+                  <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-black cursor-pointer" />
+                </Link>
+              ) : null}
+              {!isVendor ? (
+                <Link href="/ShoppingCart" aria-label="Shopping cart">
+                  <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5 text-black cursor-pointer" />
+                </Link>
+              ) : null}
+              <Link
+                href={accountHref}
+                aria-label={isVendor ? "Vendor dashboard" : "Your account"}
+              >
                 <User className="w-4 h-4 sm:w-5 sm:h-5 text-black cursor-pointer" />
               </Link>
             </div>
