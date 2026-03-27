@@ -1,7 +1,7 @@
 "use client";
 
-import { CustomerGuard } from "../../components/AuthGuard";
+import CustomerAreaLayout from "../../components/CustomerAreaLayout";
 
 export default function CheckoutLayout({ children }) {
-  return <CustomerGuard>{children}</CustomerGuard>;
+  return <CustomerAreaLayout>{children}</CustomerAreaLayout>;
 }

@@ -2,11 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Heart, ShoppingBag } from "lucide-react";
 import { useAppData } from "../../context/myContext";
 
 export default function FeaturedRentals() {
-  const { products, addToCart, addToWishlist } = useAppData();
+  const { products } = useAppData();
   const featuredProducts = products.slice(0, 6);
 
   return (
@@ -20,9 +19,6 @@ export default function FeaturedRentals() {
             <h2 className="mt-2 text-2xl font-semibold text-gray-900 sm:text-3xl">
               Browse what&apos;s trending right now
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
-              A quick scroll through occasionwear that customers can rent right away.
-            </p>
           </div>
 
           <Link
@@ -35,28 +31,19 @@ export default function FeaturedRentals() {
 
         <div className="mt-6 flex gap-4 overflow-x-auto pb-2">
           {featuredProducts.map((product) => (
-            <article
+            <Link
               key={product.id}
-              className="min-w-[250px] max-w-[250px] overflow-hidden rounded-[24px] border border-[#efe1dc] bg-gradient-to-b from-white to-[#fff8f4] shadow-sm"
+              href={`/Product/${product.id}`}
+              className="min-w-[250px] max-w-[250px] overflow-hidden rounded-[24px] border border-[#efe1dc] bg-gradient-to-b from-white to-[#fff8f4] shadow-sm transition hover:-translate-y-1 hover:shadow-md"
             >
-              <div className="relative">
-                <Image
-                  src={product.image}
-                  alt={product.name}
-                  width={720}
-                  height={920}
-                  className="h-56 w-full object-cover"
-                  style={{ objectPosition: "center top" }}
-                />
-                <button
-                  type="button"
-                  onClick={() => addToWishlist(product.id, "Saved from homepage")}
-                  className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-[#c76f5e] shadow-sm transition hover:bg-white"
-                  aria-label={`Add ${product.name} to wishlist`}
-                >
-                  <Heart size={16} />
-                </button>
-              </div>
+              <Image
+                src={product.image}
+                alt={product.name}
+                width={720}
+                height={920}
+                className="h-56 w-full object-cover"
+                style={{ objectPosition: "center top" }}
+              />
 
               <div className="p-4">
                 <div className="flex flex-wrap gap-2 text-[11px]">
@@ -95,25 +82,8 @@ export default function FeaturedRentals() {
                     </p>
                   </div>
                 </div>
-
-                <div className="mt-4 flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={() => addToCart(product.id)}
-                    className="inline-flex items-center justify-center gap-2 rounded-full bg-[#c97762] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#b96954]"
-                  >
-                    <ShoppingBag size={15} />
-                    Add to cart
-                  </button>
-                  <Link
-                    href="/Product"
-                    className="inline-flex items-center justify-center rounded-full border border-[#e4c8c0] bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-[#fff6f2]"
-                  >
-                    View details
-                  </Link>
-                </div>
               </div>
-            </article>
+            </Link>
           ))}
         </div>
       </div>

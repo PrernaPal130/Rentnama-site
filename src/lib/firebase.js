@@ -14,6 +14,7 @@ import {
 } from "firebase/auth";
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -103,6 +104,10 @@ function customerDataDoc(uid) {
 
 function vendorDataDoc(uid) {
   return doc(db, "users", uid, "appData", "vendor");
+}
+
+function publicProductDoc(productId) {
+  return doc(db, "publicProducts", productId);
 }
 
 export function subscribeToAuth(handler) {
@@ -481,6 +486,50 @@ export async function saveVendorDataToFirestore(uid, vendorData) {
   } catch (error) {
     if (!isFirestoreOfflineError(error)) {
       console.error("Failed to save vendor data to Firestore", error);
+    }
+  }
+}
+
+export async function loadPublicProductsFromFirestore() {
+  if (!db) {
+    return [];
+  }
+
+  try {
+    const snapshot = await getDocs(collection(db, "publicProducts"));
+    return snapshot.docs.map((item) => item.data());
+  } catch (error) {
+    if (!isFirestoreOfflineError(error)) {
+      console.error("Failed to load public products from Firestore", error);
+    }
+    return [];
+  }
+}
+
+export async function savePublicProductToFirestore(product) {
+  if (!db || !product?.id) {
+    return;
+  }
+
+  try {
+    await setDoc(publicProductDoc(product.id), product, { merge: true });
+  } catch (error) {
+    if (!isFirestoreOfflineError(error)) {
+      console.error("Failed to save public product to Firestore", error);
+    }
+  }
+}
+
+export async function deletePublicProductFromFirestore(productId) {
+  if (!db || !productId) {
+    return;
+  }
+
+  try {
+    await deleteDoc(publicProductDoc(productId));
+  } catch (error) {
+    if (!isFirestoreOfflineError(error)) {
+      console.error("Failed to delete public product from Firestore", error);
     }
   }
 }

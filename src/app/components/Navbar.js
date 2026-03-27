@@ -4,11 +4,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut, Search, Heart, User, ShoppingBag, Menu } from "lucide-react";
+import { useState } from "react";
 import { useAuthData } from "../../context/authContext";
 
 export default function Navbar() {
   const router = useRouter();
   const { currentUser, profile, logout } = useAuthData();
+  const [searchQuery, setSearchQuery] = useState("");
   const isVendor = profile?.role === "vendor";
   const accountHref = currentUser
     ? isVendor
@@ -24,6 +26,12 @@ export default function Navbar() {
   async function handleLogout() {
     await logout();
     router.push("/");
+  }
+
+  function submitSearch(event) {
+    event.preventDefault();
+    const nextQuery = searchQuery.trim();
+    router.push(nextQuery ? `/search?q=${encodeURIComponent(nextQuery)}` : "/search");
   }
 
   return (
@@ -80,14 +88,21 @@ export default function Navbar() {
           {/* Bottom Row - Search & Icons */}
           <div className="flex items-center justify-end w-full space-x-2 sm:space-x-3">
             {/* Search Bar */}
-            <div className="flex items-center bg-[#f2ecf6] px-2 py-1 rounded-full w-36 sm:w-56 md:w-64">
+            <form
+              onSubmit={submitSearch}
+              className="flex items-center bg-[#f2ecf6] px-2 py-1 rounded-full w-36 sm:w-56 md:w-64"
+            >
               <input
                 type="text"
                 placeholder="Search by product"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
                 className="bg-transparent outline-none text-xs sm:text-sm flex-grow"
               />
-              <Search className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
-            </div>
+              <button type="submit" aria-label="Search products">
+                <Search className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
+              </button>
+            </form>
 
             {/* Icons */}
             <div className="flex items-center space-x-2 sm:space-x-3">

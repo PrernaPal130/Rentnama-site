@@ -3,9 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppDataProvider } from "./myContext";
 import {
+  deletePublicProductFromFirestore,
   firebaseReady,
   loadCustomerDataFromFirestore,
+  loadPublicProductsFromFirestore,
   loadVendorDataFromFirestore,
+  savePublicProductToFirestore,
   saveCustomerDataToFirestore,
   saveVendorDataToFirestore,
 } from "../lib/firebase";
@@ -14,6 +17,49 @@ import { useAuthData } from "./authContext";
 const STORAGE_KEY = "rentnama-app-data";
 const LOCAL_STORAGE_SAVE_DELAY = 300;
 const FIRESTORE_SAVE_DELAY = 700;
+
+const emptyCustomerData = {
+  cart: [],
+  wishlist: [],
+  addresses: [],
+  orders: [],
+};
+
+function mapVendorListingToProduct(listing) {
+  return {
+    id: listing.id,
+    name: listing.name,
+    subtitle: `${listing.category} rental`,
+    description: listing.description,
+    image: listing.image || "/lengha.jpg",
+    gallery: [listing.image || "/lengha.jpg"],
+    price: Number(listing.price) || 0,
+    originalPrice: Math.round((Number(listing.price) || 0) * 2.1),
+    securityDeposit: Number(listing.securityDeposit) || 0,
+    sizeOptions: listing.sizes?.length ? listing.sizes : ["Free Size"],
+    defaultSize: listing.sizes?.[0] || "Free Size",
+    rentalDates: listing.availability || "Choose your rental dates",
+    reviewBullets: [
+      "Freshly added by a vendor partner",
+      "Now available to rent on RentNama",
+    ],
+    ownerId: listing.ownerId || null,
+    source: "vendor",
+  };
+}
+
+function buildPublicCatalogProducts(baseProducts, publicProducts) {
+  const mergedProducts = [...baseProducts];
+  const existingIds = new Set(baseProducts.map((product) => product.id));
+
+  publicProducts.forEach((product) => {
+    if (!existingIds.has(product.id)) {
+      mergedProducts.push(product);
+    }
+  });
+
+  return mergedProducts;
+}
 
 const defaultData = {
   products: [
@@ -64,107 +110,8 @@ const defaultData = {
       reviewBullets: ["looked premium in person"],
     },
   ],
-  cart: [
-    {
-      id: "CART-101",
-      productId: "PROD-001",
-      size: "L",
-      rentalDates: "26/05/25 to 31/05/25",
-      quantity: 1,
-    },
-    {
-      id: "CART-102",
-      productId: "PROD-001",
-      size: "L",
-      rentalDates: "26/05/25 to 31/05/25",
-      quantity: 1,
-    },
-    {
-      id: "CART-103",
-      productId: "PROD-001",
-      size: "L",
-      rentalDates: "26/05/25 to 31/05/25",
-      quantity: 1,
-    },
-  ],
-  wishlist: [
-    {
-      id: "WL-101",
-      productId: "PROD-002",
-      note: "Saved for wedding functions",
-    },
-    {
-      id: "WL-102",
-      productId: "PROD-001",
-      note: "Perfect for engagement night",
-    },
-    {
-      id: "WL-103",
-      productId: "PROD-003",
-      note: "Shortlisted for reception",
-    },
-  ],
-  addresses: [
-    {
-      id: "ADDR-101",
-      label: "Home",
-      name: "Prerna Sharma",
-      phone: "+91 98765 43210",
-      address:
-        "21 Lake View Residency, Vijay Nagar, Indore, Madhya Pradesh 452001",
-      note: "Preferred for wedding deliveries and return pickups.",
-      defaultAddress: true,
-    },
-    {
-      id: "ADDR-102",
-      label: "Office",
-      name: "Prerna Sharma",
-      phone: "+91 98765 43210",
-      address:
-        "4th Floor, Lotus Corporate Park, AB Road, Indore, Madhya Pradesh 452010",
-      note: "Use for weekday deliveries before 6 PM.",
-      defaultAddress: false,
-    },
-    {
-      id: "ADDR-103",
-      label: "Parents' Home",
-      name: "Meera Sharma",
-      phone: "+91 99887 76655",
-      address:
-        "18 Shanti Niketan, Bengali Square, Indore, Madhya Pradesh 452016",
-      note: "Backup address for urgent bridal deliveries.",
-      defaultAddress: false,
-    },
-  ],
-  orders: [
-    {
-      id: "RN-24051",
-      productId: "PROD-001",
-      rentalDates: "26 May 2025 - 31 May 2025",
-      status: "Arriving by 24 May",
-      depositNote: "Rs. 5,000 refundable deposit",
-      action: "Track package",
-      statusType: "shipping",
-    },
-    {
-      id: "RN-24018",
-      productId: "PROD-003",
-      rentalDates: "14 June 2025 - 18 June 2025",
-      status: "Returned successfully",
-      depositNote: "Deposit refunded",
-      action: "Rent again",
-      statusType: "returned",
-    },
-    {
-      id: "RN-23984",
-      productId: "PROD-002",
-      rentalDates: "2 April 2025 - 5 April 2025",
-      status: "Delivered",
-      depositNote: "Return pickup scheduled",
-      action: "View details",
-      statusType: "delivered",
-    },
-  ],
+  ...emptyCustomerData,
+  publicProducts: [],
   vendorListings: [
     {
       id: "LIST-101",
@@ -341,9 +288,18 @@ export default function MyState({ children }) {
     async function hydrateStore() {
       try {
         const storedData = window.localStorage.getItem(STORAGE_KEY);
+        const publicProducts = firebaseReady
+          ? await loadPublicProductsFromFirestore()
+          : [];
+        const baseState = {
+          ...defaultData,
+          ...emptyCustomerData,
+          publicProducts,
+        };
 
         if (!currentUser && storedData) {
-          setData((current) => ({ ...current, ...JSON.parse(storedData) }));
+          setData({ ...baseState, ...JSON.parse(storedData) });
+          return;
         }
 
         if (firebaseReady && currentUser?.uid) {
@@ -355,11 +311,14 @@ export default function MyState({ children }) {
           ]);
 
           setData({
-            ...defaultData,
+            ...baseState,
             ...(remoteCustomerData || {}),
             ...(remoteVendorData || {}),
           });
+          return;
         }
+
+        setData(baseState);
       } catch (error) {
         console.error("Failed to load shared app data", error);
       } finally {
@@ -425,13 +384,18 @@ export default function MyState({ children }) {
     profile,
   ]);
 
+  const catalogProducts = useMemo(
+    () => buildPublicCatalogProducts(data.products, data.publicProducts),
+    [data.products, data.publicProducts]
+  );
+
   const productsById = useMemo(
     () =>
-      data.products.reduce((accumulator, product) => {
+      catalogProducts.reduce((accumulator, product) => {
         accumulator[product.id] = product;
         return accumulator;
       }, {}),
-    [data.products]
+    [catalogProducts]
   );
 
   function addAddress(addressInput) {
@@ -578,7 +542,10 @@ export default function MyState({ children }) {
 
       const newOrders = current.cart
         .map((cartItem) => {
-          const product = current.products.find(
+          const product = buildPublicCatalogProducts(
+            current.products,
+            current.publicProducts
+          ).find(
             (item) => item.id === cartItem.productId
           );
 
@@ -641,12 +608,19 @@ export default function MyState({ children }) {
       description: listingInput.description,
       blockedRanges: [],
       bookedDates: [],
+      ownerId: currentUser?.uid || null,
     };
+    const publicProduct = mapVendorListingToProduct(newListing);
 
     setData((current) => ({
       ...current,
+      publicProducts: [
+        publicProduct,
+        ...current.publicProducts.filter((item) => item.id !== publicProduct.id),
+      ],
       vendorListings: [newListing, ...current.vendorListings],
     }));
+    savePublicProductToFirestore(publicProduct);
   }
 
   function updateVendorListing(listingId, listingInput) {
@@ -661,6 +635,8 @@ export default function MyState({ children }) {
       ...(listingInput.availability ? [listingInput.availability] : []),
     ].filter(Boolean);
 
+    let nextPublicProduct = null;
+
     setData((current) => ({
       ...current,
       vendorListings: current.vendorListings.map((listing) => {
@@ -668,7 +644,7 @@ export default function MyState({ children }) {
           return listing;
         }
 
-        return {
+        const nextListing = {
           ...listing,
           name: listingInput.productName,
           category: listingInput.category,
@@ -680,8 +656,19 @@ export default function MyState({ children }) {
           sizes: sizes.length > 0 ? sizes : listing.sizes,
           description: listingInput.description,
         };
+        nextPublicProduct = mapVendorListingToProduct(nextListing);
+        return nextListing;
       }),
+      publicProducts: current.publicProducts.map((product) =>
+        product.id === listingId
+          ? nextPublicProduct || product
+          : product
+      ),
     }));
+
+    if (nextPublicProduct) {
+      savePublicProductToFirestore(nextPublicProduct);
+    }
   }
 
   function blockVendorListingDates(listingId, range) {
@@ -772,15 +759,22 @@ export default function MyState({ children }) {
   function archiveVendorListing(listingId) {
     setData((current) => ({
       ...current,
+      publicProducts: current.publicProducts.filter(
+        (product) => product.id !== listingId
+      ),
       vendorListings: current.vendorListings.map((listing) =>
         listing.id === listingId ? { ...listing, status: "Archived" } : listing
       ),
     }));
+    deletePublicProductFromFirestore(listingId);
   }
 
   function deleteVendorListing(listingId) {
     setData((current) => ({
       ...current,
+      publicProducts: current.publicProducts.filter(
+        (product) => product.id !== listingId
+      ),
       vendorListings: current.vendorListings.filter(
         (listing) => listing.id !== listingId
       ),
@@ -791,6 +785,7 @@ export default function MyState({ children }) {
         (item) => item.listingId !== listingId
       ),
     }));
+    deletePublicProductFromFirestore(listingId);
   }
 
   const vendorListingsWithAvailability = useMemo(
@@ -805,6 +800,7 @@ export default function MyState({ children }) {
   const value = useMemo(
     () => ({
       ...data,
+      products: catalogProducts,
       vendorListings: vendorListingsWithAvailability,
       isHydrated,
       addAddress,
@@ -829,6 +825,7 @@ export default function MyState({ children }) {
         vendorListingsWithAvailability.find((listing) => listing.id === listingId),
     }),
     [
+      catalogProducts,
       data,
       isHydrated,
       productsById,

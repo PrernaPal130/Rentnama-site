@@ -1,10 +1,11 @@
 import Image from "next/image";
+import { BadgeCheck } from "lucide-react";
 
 export default function FeaturedShops() {
   const shops = [
     {
       id: 1,
-      name: "Shop rating",
+      name: "Verified boutique",
       rating: "4.5",
       reviews: "(5k reviews)",
       image: "/kurta2.webp",
@@ -12,7 +13,7 @@ export default function FeaturedShops() {
     },
     {
       id: 2,
-      name: "Shop rating",
+      name: "Trusted bridal studio",
       rating: "4.5",
       reviews: "(5k reviews)",
       image: "/lengha2.webp",
@@ -20,7 +21,7 @@ export default function FeaturedShops() {
     },
     {
       id: 3,
-      name: "Shop rating",
+      name: "Verified designer label",
       rating: "4.5",
       reviews: "(5k reviews)",
       image: "/lengha3.webp",
@@ -28,7 +29,7 @@ export default function FeaturedShops() {
     },
     {
       id: 4,
-      name: "Shop rating",
+      name: "Trusted saree house",
       rating: "4.5",
       reviews: "(5k reviews)",
       image: "/saree.webp",
@@ -36,7 +37,7 @@ export default function FeaturedShops() {
     },
     {
       id: 5,
-      name: "Shop rating",
+      name: "Verified festive store",
       rating: "4.5",
       reviews: "(5k reviews)",
       image: "/indo.jpeg",
@@ -44,7 +45,7 @@ export default function FeaturedShops() {
     },
     {
       id: 6,
-      name: "Shop rating",
+      name: "Trusted couture partner",
       rating: "4.5",
       reviews: "(5k reviews)",
       image: "/lengha4.webp",
@@ -52,7 +53,7 @@ export default function FeaturedShops() {
     },
     {
       id: 7,
-      name: "Shop rating",
+      name: "Verified menswear rental",
       rating: "4.5",
       reviews: "(5k reviews)",
       image: "/sherwani.webp",
@@ -64,7 +65,7 @@ export default function FeaturedShops() {
     <section className="bg-white px-4 py-8">
       <h2 className="mb-6 text-xl font-semibold text-gray-800">Featured Shops</h2>
 
-      <div className="flex justify-center gap-6 overflow-x-auto no-scrollbar">
+      <div className="flex justify-center gap-6 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {shops.map((shop) => (
           <div
             key={shop.id}
@@ -81,7 +82,13 @@ export default function FeaturedShops() {
               />
             </div>
             <div className="p-3 text-center">
-              <p className="text-sm font-medium text-gray-800">{shop.name}</p>
+              <div className="flex items-center justify-center gap-2">
+                <p className="text-sm font-medium text-gray-800">{shop.name}</p>
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#eef8f1] px-2 py-1 text-[10px] font-semibold text-[#2f6b49]">
+                  <BadgeCheck size={11} />
+                  Trusted
+                </span>
+              </div>
               <p className="mt-1 text-sm text-gray-600">
                 {shop.rating} <span className="text-yellow-500">*</span>
               </p>
