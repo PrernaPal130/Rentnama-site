@@ -29,6 +29,22 @@ function GuardFallback({ title, href, linkLabel }) {
   );
 }
 
+function GuardLoading({ title }) {
+  return (
+    <main className="min-h-screen bg-[#fffaf7] px-4 py-10 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-xl rounded-[28px] border border-[#ecd8d1] bg-white p-8 text-center shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#c57f6d]">
+          Loading
+        </p>
+        <h1 className="mt-3 text-2xl font-semibold text-gray-900">{title}</h1>
+        <p className="mt-3 text-sm leading-7 text-gray-600">
+          We&apos;re loading your account details.
+        </p>
+      </div>
+    </main>
+  );
+}
+
 export function CustomerGuard({ children }) {
   const { currentUser, profile, authLoading } = useAuthData();
   const router = useRouter();
@@ -49,7 +65,11 @@ export function CustomerGuard({ children }) {
     }
   }, [authLoading, currentUser, pathname, profile, router]);
 
-  if (authLoading || !currentUser || profile?.role === "vendor") {
+  if (authLoading) {
+    return <GuardLoading title="Loading your customer account" />;
+  }
+
+  if (!currentUser || profile?.role === "vendor") {
     return (
       <GuardFallback
         title="Customer access required"
@@ -90,8 +110,11 @@ export function VendorGuard({ children }) {
     }
   }, [authLoading, currentUser, isSetupRoute, needsMfaSetup, pathname, profile, router]);
 
+  if (authLoading) {
+    return <GuardLoading title="Loading your vendor account" />;
+  }
+
   if (
-    authLoading ||
     !currentUser ||
     (profile?.role && profile.role !== "vendor") ||
     (needsMfaSetup && !isSetupRoute)
