@@ -2,14 +2,15 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
-  createCustomerAccount,
+  beginCustomerPhoneAuth,
+  completeCustomerPhoneAuth,
   createVendorAccount,
   firebaseReady,
   getUserProfile,
   logoutUser,
-  signInCustomer,
   signInVendor,
   subscribeToAuth,
+  updateCustomerProfile,
 } from "../lib/firebase";
 
 const AuthContext = createContext(null);
@@ -37,14 +38,36 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, []);
 
+  async function handleCompleteCustomerPhoneAuth(
+    confirmationResult,
+    verificationCode,
+    profileInput = {}
+  ) {
+    const user = await completeCustomerPhoneAuth(
+      confirmationResult,
+      verificationCode,
+      profileInput
+    );
+    const nextProfile = await getUserProfile(user.uid);
+    setProfile(nextProfile);
+    return user;
+  }
+
+  async function handleUpdateCustomerProfile(uid, profileInput = {}) {
+    const nextProfile = await updateCustomerProfile(uid, profileInput);
+    setProfile(nextProfile);
+    return nextProfile;
+  }
+
   const value = useMemo(
     () => ({
       currentUser,
       profile,
       authLoading,
       firebaseReady,
-      loginCustomer: signInCustomer,
-      signupCustomer: createCustomerAccount,
+      beginCustomerPhoneAuth,
+      completeCustomerPhoneAuth: handleCompleteCustomerPhoneAuth,
+      updateCustomerProfile: handleUpdateCustomerProfile,
       loginVendor: signInVendor,
       signupVendor: createVendorAccount,
       logout: logoutUser,

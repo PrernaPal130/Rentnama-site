@@ -1,6 +1,7 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import {
   createUserWithEmailAndPassword,
+  EmailAuthProvider,
   getAuth,
   getMultiFactorResolver,
   multiFactor,
@@ -8,7 +9,11 @@ import {
   PhoneAuthProvider,
   PhoneMultiFactorGenerator,
   RecaptchaVerifier,
+  reauthenticateWithCredential,
+  reload,
+  sendEmailVerification,
   signInWithEmailAndPassword,
+  signInWithPhoneNumber,
   signOut,
   updateProfile,
 } from "firebase/auth";
@@ -24,6 +29,12 @@ import {
   setDoc,
   where,
 } from "firebase/firestore";
+import {
+  getDownloadURL,
+  getStorage,
+  ref,
+  uploadBytes,
+} from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -49,6 +60,7 @@ const app = firebaseReady
 
 export const auth = app ? getAuth(app) : null;
 export const db = app ? getFirestore(app) : null;
+export const storage = app ? getStorage(app) : null;
 
 function friendlyAuthErrorMessage(error) {
   switch (error?.code) {
@@ -75,6 +87,10 @@ function friendlyAuthErrorMessage(error) {
       return "This OTP has expired. Please request a new one.";
     case "auth/invalid-phone-number":
       return "Please use a valid phone number with country code.";
+    case "auth/invalid-app-credential":
+      return "Phone verification could not be validated. Refresh the page and try again, preferably in an incognito window.";
+    case "auth/requires-recent-login":
+      return "For security, please confirm your vendor password again before finishing OTP setup.";
     case "auth/captcha-check-failed":
       return "reCAPTCHA verification failed. Please try again.";
     case "auth/quota-exceeded":
@@ -143,29 +159,84 @@ async function saveUserProfile(uid, profile) {
   await setDoc(profileDoc(uid), profile, { merge: true });
 }
 
-export async function createCustomerAccount({ name, phoneNumber, email, password }) {
+export async function beginCustomerPhoneAuth(phoneNumber, appVerifier) {
   if (!auth) {
     throw new Error("Firebase is not configured yet.");
   }
 
   try {
-    const credential = await createUserWithEmailAndPassword(auth, email, password);
-
-    if (name) {
-      await updateProfile(credential.user, { displayName: name });
-    }
-
-    await saveUserProfile(credential.user.uid, {
-      role: "customer",
-      name,
-      phoneNumber,
-      email,
-    });
-
-    return credential.user;
+    return await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
   } catch (error) {
     throw new Error(friendlyAuthErrorMessage(error));
   }
+}
+
+export async function completeCustomerPhoneAuth(
+  confirmationResult,
+  verificationCode,
+  profileInput = {}
+) {
+  if (!confirmationResult) {
+    throw new Error("OTP verification is not ready yet.");
+  }
+
+  try {
+    const credential = await confirmationResult.confirm(verificationCode);
+    const user = credential.user;
+    const existingProfile = await getUserProfile(user.uid);
+
+    if (existingProfile?.role === "vendor") {
+      await signOut(auth);
+      throw new Error("Use the vendor login for this account.");
+    }
+
+    const nextProfile = {
+      role: "customer",
+      phoneNumber: user.phoneNumber || profileInput.phoneNumber || "",
+      email: profileInput.email || existingProfile?.email || "",
+      name:
+        profileInput.name ||
+        existingProfile?.name ||
+        user.displayName ||
+        "RentNama Customer",
+    };
+
+    if (nextProfile.name) {
+      await updateProfile(user, { displayName: nextProfile.name });
+    }
+
+    await saveUserProfile(user.uid, nextProfile);
+
+    return user;
+  } catch (error) {
+    throw new Error(friendlyAuthErrorMessage(error));
+  }
+}
+
+export async function updateCustomerProfile(uid, profileInput = {}) {
+  if (!uid) {
+    throw new Error("Customer account not found.");
+  }
+
+  const existingProfile = await getUserProfile(uid);
+
+  if (existingProfile?.role === "vendor") {
+    throw new Error("Use the vendor profile flow for this account.");
+  }
+
+  const nextProfile = {
+    role: "customer",
+    phoneNumber: existingProfile?.phoneNumber || profileInput.phoneNumber || "",
+    email: profileInput.email || existingProfile?.email || "",
+    name: profileInput.name || existingProfile?.name || "RentNama Customer",
+  };
+
+  if (auth?.currentUser && nextProfile.name) {
+    await updateProfile(auth.currentUser, { displayName: nextProfile.name });
+  }
+
+  await saveUserProfile(uid, nextProfile);
+  return nextProfile;
 }
 
 function buildVendorId(businessName) {
@@ -205,35 +276,13 @@ export async function createVendorAccount({
       vendorId,
     });
 
+    await sendEmailVerification(credential.user);
+
     return {
       user: credential.user,
       vendorId,
     };
   } catch (error) {
-    throw new Error(friendlyAuthErrorMessage(error));
-  }
-}
-
-export async function signInCustomer({ email, password }) {
-  if (!auth) {
-    throw new Error("Firebase is not configured yet.");
-  }
-
-  try {
-    const credential = await signInWithEmailAndPassword(auth, email, password);
-    const profile = await getUserProfile(credential.user.uid);
-
-    if (profile?.role === "vendor") {
-      await signOut(auth);
-      throw new Error("Use the vendor login for this account.");
-    }
-
-    return credential.user;
-  } catch (error) {
-    if (error instanceof Error && !error.message.startsWith("Firebase")) {
-      throw new Error(error.message);
-    }
-
     throw new Error(friendlyAuthErrorMessage(error));
   }
 }
@@ -349,6 +398,19 @@ export async function completeVendorMfaEnrollment(
   }
 }
 
+export async function reauthenticateVendorForMfa(user, password) {
+  if (!user?.email) {
+    throw new Error("Vendor email is not available for reauthentication.");
+  }
+
+  try {
+    const credential = EmailAuthProvider.credential(user.email, password);
+    await reauthenticateWithCredential(user, credential);
+  } catch (error) {
+    throw new Error(friendlyAuthErrorMessage(error));
+  }
+}
+
 export async function beginVendorMfaSignIn({
   loginValue,
   password,
@@ -366,6 +428,14 @@ export async function beginVendorMfaSignIn({
     if (profile?.role !== "vendor") {
       await signOut(auth);
       throw new Error("This is not a vendor account.");
+    }
+
+    if (!credential.user.emailVerified) {
+      return {
+        status: "needs-email-verification",
+        user: credential.user,
+        profile,
+      };
     }
 
     return {
@@ -405,6 +475,27 @@ export async function beginVendorMfaSignIn({
 
     throw new Error(friendlyAuthErrorMessage(error));
   }
+}
+
+export async function resendVendorVerificationEmail(user) {
+  if (!user) {
+    throw new Error("No vendor account is signed in right now.");
+  }
+
+  try {
+    await sendEmailVerification(user);
+  } catch (error) {
+    throw new Error(friendlyAuthErrorMessage(error));
+  }
+}
+
+export async function refreshCurrentUser(user) {
+  if (!user) {
+    return null;
+  }
+
+  await reload(user);
+  return auth?.currentUser || user;
 }
 
 export async function completeVendorMfaSignIn(
@@ -531,5 +622,33 @@ export async function deletePublicProductFromFirestore(productId) {
     if (!isFirestoreOfflineError(error)) {
       console.error("Failed to delete public product from Firestore", error);
     }
+  }
+}
+
+export async function uploadVendorListingImage(uid, listingId, file) {
+  if (!storage) {
+    throw new Error("Firebase Storage is not configured yet.");
+  }
+
+  if (!uid || !listingId || !file) {
+    throw new Error("Listing image upload needs a vendor, listing, and file.");
+  }
+
+  try {
+    const extension = file.name?.split(".").pop()?.toLowerCase() || "jpg";
+    const imageRef = ref(
+      storage,
+      `vendor-listings/${uid}/${listingId}.${extension}`
+    );
+
+    await uploadBytes(imageRef, file, {
+      contentType: file.type || "image/jpeg",
+    });
+
+    return await getDownloadURL(imageRef);
+  } catch (error) {
+    throw new Error(
+      error?.message || "We could not upload the listing image right now."
+    );
   }
 }

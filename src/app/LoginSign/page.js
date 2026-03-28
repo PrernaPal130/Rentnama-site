@@ -1,23 +1,55 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Store, UserRound } from "lucide-react";
+import { ArrowRight, Smartphone, Store, UserRound } from "lucide-react";
 import { useAuthData } from "../../context/authContext";
+import { createMfaRecaptcha } from "../../lib/firebase";
+import { getUserProfile } from "../../lib/firebase";
 
 function LoginSignContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { firebaseReady, loginCustomer } = useAuthData();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const { firebaseReady, beginCustomerPhoneAuth, completeCustomerPhoneAuth } =
+    useAuthData();
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [otp, setOtp] = useState("");
+  const [confirmationResult, setConfirmationResult] = useState(null);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const signupSuccess = searchParams.get("signup") === "success";
+  const recaptchaRef = useRef(null);
   const redirectTo = searchParams.get("redirect") || "/";
 
-  const handleLogin = async (event) => {
+  async function buildFreshRecaptcha() {
+    if (recaptchaRef.current?.clear) {
+      recaptchaRef.current.clear();
+    }
+
+    recaptchaRef.current = null;
+
+    const container = document.getElementById("customer-login-recaptcha");
+    if (container) {
+      container.innerHTML = "";
+    }
+
+    const verifier = createMfaRecaptcha("customer-login-recaptcha");
+    await verifier.render();
+    recaptchaRef.current = verifier;
+    return verifier;
+  }
+
+  useEffect(() => {
+    return () => {
+      if (recaptchaRef.current?.clear) {
+        recaptchaRef.current.clear();
+      }
+      recaptchaRef.current = null;
+    };
+  }, []);
+
+  async function handleSendOtp(event) {
     event.preventDefault();
 
     if (!firebaseReady) {
@@ -28,14 +60,48 @@ function LoginSignContent() {
     try {
       setIsSubmitting(true);
       setError("");
-      await loginCustomer({ email, password });
+      setInfo("");
+      const verifier = await buildFreshRecaptcha();
+
+      const nextConfirmationResult = await beginCustomerPhoneAuth(
+        phoneNumber,
+        verifier
+      );
+
+      setConfirmationResult(nextConfirmationResult);
+      setInfo("OTP sent to your phone number.");
+    } catch (loginError) {
+      setError(loginError.message || "Unable to send OTP right now.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleVerifyOtp(event) {
+    event.preventDefault();
+
+    try {
+      setIsSubmitting(true);
+      setError("");
+      const user = await completeCustomerPhoneAuth(confirmationResult, otp, {
+        phoneNumber,
+      });
+      const profile = await getUserProfile(user.uid);
+
+      if (!profile?.name || !profile?.email) {
+        router.push("/CustomerSetupProfile");
+        return;
+      }
+
       router.push(redirectTo);
     } catch (loginError) {
       setError(loginError.message || "Unable to log in right now.");
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }
+
+  const otpStep = Boolean(confirmationResult);
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#fff8f4_0%,#f7ebe5_52%,#fffdfb_100%)] px-4 py-8 sm:px-6 lg:px-8">
@@ -52,8 +118,8 @@ function LoginSignContent() {
               Dress for the moment, not just the purchase.
             </h1>
             <p className="mt-5 max-w-xl text-sm leading-7 text-[#5f524c]">
-              Sign in to manage rentals, track orders, update your wishlist, and
-              keep every celebration look organized in one place.
+              Sign in with your phone number to manage rentals, track orders,
+              update your wishlist, and keep every celebration look organized in one place.
             </p>
 
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -65,8 +131,7 @@ function LoginSignContent() {
                   Customer access
                 </p>
                 <p className="mt-2 text-sm leading-6 text-[#625650]">
-                  View saved looks, checkout faster, and track every rental from
-                  one account.
+                  Fast phone OTP login for browsing, saving looks, and checkout.
                 </p>
               </div>
 
@@ -81,8 +146,7 @@ function LoginSignContent() {
                   Vendor login
                 </p>
                 <p className="mt-2 text-sm leading-6 text-[#625650]">
-                  Manage your catalog, bookings, and rental requests from the
-                  vendor portal.
+                  Manage your catalog, bookings, and rental requests from the vendor portal.
                 </p>
                 <div className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-[#b46c5b]">
                   Continue as vendor
@@ -102,68 +166,93 @@ function LoginSignContent() {
               Customer Login
             </p>
             <h2 className="mt-3 text-3xl font-semibold text-[#2f2622]">
-              Welcome back
+              {otpStep ? "Verify OTP" : "Welcome back"}
             </h2>
             <p className="mt-3 text-sm leading-7 text-[#625650]">
-              Use your email and password to continue to your rentals, orders,
-              and saved looks.
+              {otpStep
+                ? `Enter the OTP sent to ${phoneNumber} to continue.`
+                : "Use your phone number to receive a secure one-time code and continue shopping."}
             </p>
 
-            <form onSubmit={handleLogin} className="mt-8 space-y-5">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-[#4e433e]">
-                  Email address
-                </label>
-                <input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
-                />
-              </div>
+            <div id="customer-login-recaptcha" className="mt-4" />
 
-              <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <label className="block text-sm font-medium text-[#4e433e]">
-                    Password
+            <form
+              onSubmit={otpStep ? handleVerifyOtp : handleSendOtp}
+              className="mt-8 space-y-5"
+            >
+              {!otpStep ? (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                    Phone number
                   </label>
+                  <input
+                    type="tel"
+                    placeholder="+91 98765 43210"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    required
+                    className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                  />
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-[28px] border border-[#efd9d0] bg-[#fff8f4] p-4 text-sm leading-6 text-[#765d56]">
+                    OTP sent to <span className="font-semibold">{phoneNumber}</span>.
+                    Enter it to log in to your customer account.
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                      OTP
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Enter 6-digit OTP"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value)}
+                      required
+                      className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                    />
+                  </div>
+
                   <button
                     type="button"
-                    className="text-xs font-medium text-[#b46c5b] hover:underline"
+                    onClick={() => {
+                      setConfirmationResult(null);
+                      setOtp("");
+                      setInfo("");
+                    }}
+                    className="text-sm font-medium text-[#b46c5b] hover:underline"
                   >
-                    Forgot password?
+                    Change phone number
                   </button>
-                </div>
-                <input
-                  type="password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
-                />
-              </div>
+                </>
+              )}
 
               <button
                 type="submit"
                 disabled={isSubmitting}
                 className="w-full rounded-full bg-[#c97762] py-3.5 text-sm font-semibold text-white transition hover:bg-[#b96954]"
               >
-                {isSubmitting ? "Logging in..." : "Log In"}
+                {otpStep
+                  ? isSubmitting
+                    ? "Verifying..."
+                    : "Verify OTP"
+                  : isSubmitting
+                    ? "Sending OTP..."
+                    : "Send OTP"}
               </button>
             </form>
+
+            {info ? (
+              <p className="mt-4 rounded-2xl border border-[#d9e7d8] bg-[#f5fbf4] px-4 py-3 text-sm text-[#4e7a46]">
+                {info}
+              </p>
+            ) : null}
 
             {error ? (
               <p className="mt-4 rounded-2xl border border-[#efd6ce] bg-[#fff6f2] px-4 py-3 text-sm text-[#9e5949]">
                 {error}
-              </p>
-            ) : null}
-
-            {signupSuccess ? (
-              <p className="mt-4 rounded-2xl border border-[#d9e7d8] bg-[#f5fbf4] px-4 py-3 text-sm text-[#4e7a46]">
-                Account created successfully. Please log in.
               </p>
             ) : null}
 

@@ -3,7 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, ShieldCheck, Smartphone } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  Smartphone,
+} from "lucide-react";
 import { VendorGuard } from "../../components/AuthGuard";
 import { useAuthData } from "../../context/authContext";
 import {
@@ -11,6 +18,7 @@ import {
   completeVendorMfaEnrollment,
   createMfaRecaptcha,
   getEnrolledFactors,
+  reauthenticateVendorForMfa,
 } from "../../lib/firebase";
 
 function VendorSetupMfaInner() {
@@ -23,20 +31,35 @@ function VendorSetupMfaInner() {
   const [info, setInfo] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [needsPasswordRefresh, setNeedsPasswordRefresh] = useState(false);
 
-  const phoneNumber = profile?.phoneNumber || "";
+  const phoneNumber = (profile?.phoneNumber || "").replace(/\s+/g, "");
   const hasEnrolledFactor =
     currentUser && getEnrolledFactors(currentUser).length > 0;
 
-  useEffect(() => {
-    if (!currentUser || recaptchaRef.current) {
-      return;
+  async function buildFreshRecaptcha() {
+    if (recaptchaRef.current?.clear) {
+      recaptchaRef.current.clear();
     }
 
-    try {
-      recaptchaRef.current = createMfaRecaptcha("vendor-mfa-recaptcha");
-    } catch (setupError) {
-      setError(setupError.message || "Unable to initialize OTP verification.");
+    recaptchaRef.current = null;
+
+    const container = document.getElementById("vendor-mfa-recaptcha");
+    if (container) {
+      container.innerHTML = "";
+    }
+
+    const verifier = createMfaRecaptcha("vendor-mfa-recaptcha");
+    await verifier.render();
+    recaptchaRef.current = verifier;
+    return verifier;
+  }
+
+  useEffect(() => {
+    if (!currentUser) {
+      return;
     }
 
     return () => {
@@ -54,8 +77,8 @@ function VendorSetupMfaInner() {
   }, [hasEnrolledFactor, router]);
 
   async function handleSendOtp() {
-    if (!currentUser || !phoneNumber || !recaptchaRef.current) {
-      setError("Vendor phone number or OTP verifier is not ready yet.");
+    if (!currentUser || !phoneNumber) {
+      setError("Vendor phone number is not ready yet.");
       return;
     }
 
@@ -63,10 +86,11 @@ function VendorSetupMfaInner() {
       setIsSending(true);
       setError("");
       setInfo("");
+      const verifier = await buildFreshRecaptcha();
       const nextVerificationId = await beginVendorMfaEnrollment(
         currentUser,
         phoneNumber,
-        recaptchaRef.current
+        verifier
       );
       setVerificationId(nextVerificationId);
       setInfo("OTP sent to your registered phone number.");
@@ -88,6 +112,14 @@ function VendorSetupMfaInner() {
     try {
       setIsVerifying(true);
       setError("");
+      if (needsPasswordRefresh) {
+        if (!confirmPassword) {
+          throw new Error("Enter your vendor password once more to continue.");
+        }
+
+        await reauthenticateVendorForMfa(currentUser, confirmPassword);
+      }
+
       await completeVendorMfaEnrollment(
         currentUser,
         verificationId,
@@ -96,7 +128,15 @@ function VendorSetupMfaInner() {
       );
       router.push("/VendorDashboard");
     } catch (verifyError) {
-      setError(verifyError.message || "Unable to verify OTP right now.");
+      const nextMessage =
+        verifyError.message || "Unable to verify OTP right now.";
+      if (
+        nextMessage.includes("confirm your vendor password again") ||
+        nextMessage.toLowerCase().includes("recent")
+      ) {
+        setNeedsPasswordRefresh(true);
+      }
+      setError(nextMessage);
     } finally {
       setIsVerifying(false);
     }
@@ -122,9 +162,6 @@ function VendorSetupMfaInner() {
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#b86f5f]">
                 Vendor Security Setup
               </p>
-              <h1 className="mt-4 max-w-lg text-4xl font-semibold leading-tight text-[#2f2622] sm:text-5xl">
-                Add real OTP protection to your vendor account.
-              </h1>
               <p className="mt-5 max-w-xl text-sm leading-7 text-[#625650]">
                 Before entering the vendor dashboard, enroll your registered
                 phone number as a secure second factor for login.
@@ -200,6 +237,35 @@ function VendorSetupMfaInner() {
                     className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
                   />
                 </div>
+
+                {needsPasswordRefresh ? (
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                      Confirm vendor password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter your password again"
+                        value={confirmPassword}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                        required
+                        className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 pr-12 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((current) => !current)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8f756d]"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-[#7b6660]">
+                      Firebase is asking for a fresh secure session before OTP enrollment.
+                    </p>
+                  </div>
+                ) : null}
 
                 <button
                   type="submit"

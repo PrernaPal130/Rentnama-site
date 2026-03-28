@@ -15,6 +15,8 @@ import {
   Tag,
 } from "lucide-react";
 import { useAppData } from "../../../../../context/myContext";
+import { useAuthData } from "../../../../../context/authContext";
+import { uploadVendorListingImage } from "../../../../../lib/firebase";
 
 function makeFormState(listing) {
   if (!listing) {
@@ -45,13 +47,19 @@ function makeFormState(listing) {
 export default function EditVendorListingPage() {
   const params = useParams();
   const router = useRouter();
+  const { currentUser } = useAuthData();
   const { getVendorListingById, updateVendorListing } = useAppData();
   const listingId = Array.isArray(params?.id) ? params.id[0] : params?.id;
   const listing = getVendorListingById(listingId);
   const [formData, setFormData] = useState(makeFormState(listing));
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
+  const [submitError, setSubmitError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setFormData(makeFormState(listing));
+    setImagePreview(listing?.image || "");
   }, [listing]);
 
   function handleChange(event) {
@@ -62,15 +70,54 @@ export default function EditVendorListingPage() {
     }));
   }
 
-  function handleSubmit(event) {
+  function handleImageChange(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      setImageFile(null);
+      setImagePreview(listing?.image || "");
+      return;
+    }
+
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  }
+
+  async function handleSubmit(event) {
     event.preventDefault();
 
     if (!listingId) {
       return;
     }
 
-    updateVendorListing(listingId, formData);
-    router.push("/VendorDashboard/Listings");
+    setSubmitError("");
+    setIsSaving(true);
+
+    try {
+      let uploadedImage = listing?.image || "";
+
+      if (imageFile) {
+        uploadedImage = await uploadVendorListingImage(
+          currentUser?.uid,
+          listingId,
+          imageFile
+        );
+      }
+
+      updateVendorListing(listingId, {
+        ...formData,
+        image: uploadedImage,
+      });
+      router.push("/VendorDashboard/Listings");
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "We could not save the listing right now."
+      );
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   if (!listing) {
@@ -295,26 +342,55 @@ export default function EditVendorListingPage() {
                 </div>
 
                 <div className="rounded-3xl border border-dashed border-[#e7cfc7] bg-[#fff9f6] p-5">
-                  <div className="flex items-center gap-3">
-                    <ImagePlus size={18} className="text-[#b46c5b]" />
-                    <div>
+                  <div className="flex items-start gap-3">
+                    <ImagePlus size={18} className="mt-1 text-[#b46c5b]" />
+                    <div className="w-full">
                       <p className="font-semibold text-gray-900">
-                        Product photos
+                        Replace product photo
                       </p>
                       <p className="mt-1 text-sm text-gray-600">
-                        Photo editing can be connected next. This form now focuses
-                        on updating the saved listing details cleanly.
+                        Upload a new image if you want this listing to show a refreshed photo.
                       </p>
+
+                      <label className="mt-4 flex cursor-pointer items-center justify-center rounded-2xl border border-[#e4c8c0] bg-white px-4 py-3 text-sm font-medium text-[#a96051] transition hover:bg-[#fff6f2]">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                          className="hidden"
+                        />
+                        Choose new image
+                      </label>
+
+                      {imagePreview ? (
+                        <div className="mt-4 overflow-hidden rounded-2xl border border-[#ead6cf] bg-white">
+                          <Image
+                            src={imagePreview}
+                            alt="Updated listing preview"
+                            width={720}
+                            height={880}
+                            className="h-72 w-full object-cover"
+                            style={{ objectPosition: "center top" }}
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
 
+                {submitError ? (
+                  <div className="rounded-2xl border border-[#efd1c8] bg-[#fff4ef] px-4 py-3 text-sm text-[#a45847]">
+                    {submitError}
+                  </div>
+                ) : null}
+
                 <div className="flex flex-wrap gap-3">
                   <button
                     type="submit"
+                    disabled={isSaving}
                     className="inline-flex items-center gap-2 rounded-full bg-[#c97762] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#b96954]"
                   >
-                    Save changes
+                    {isSaving ? "Saving changes..." : "Save changes"}
                     <ArrowRight size={16} />
                   </button>
                   <Link

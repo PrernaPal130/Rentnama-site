@@ -7,6 +7,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Building2,
+  Eye,
+  EyeOff,
   LockKeyhole,
   ShieldCheck,
   Smartphone,
@@ -31,11 +33,31 @@ function VendorLoginContent() {
   const [mfaResolver, setMfaResolver] = useState(null);
   const [verificationId, setVerificationId] = useState("");
   const [maskedPhone, setMaskedPhone] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const recaptchaRef = useRef(null);
   const signupSuccess = searchParams.get("signup") === "success";
   const signedUpVendorId = searchParams.get("vendorId");
   const signedUpBusinessName = searchParams.get("businessName");
+  const emailVerified = searchParams.get("emailVerified") === "1";
   const redirectTo = searchParams.get("redirect") || "/VendorDashboard";
+
+  async function buildFreshRecaptcha() {
+    if (recaptchaRef.current?.clear) {
+      recaptchaRef.current.clear();
+    }
+
+    recaptchaRef.current = null;
+
+    const container = document.getElementById("vendor-login-recaptcha");
+    if (container) {
+      container.innerHTML = "";
+    }
+
+    const verifier = createMfaRecaptcha("vendor-login-recaptcha");
+    await verifier.render();
+    recaptchaRef.current = verifier;
+    return verifier;
+  }
 
   useEffect(() => {
     return () => {
@@ -57,19 +79,21 @@ function VendorLoginContent() {
 
     try {
       setIsSubmitting(true);
-
-      if (!recaptchaRef.current) {
-        recaptchaRef.current = createMfaRecaptcha("vendor-login-recaptcha");
-      }
+      const verifier = await buildFreshRecaptcha();
 
       const result = await beginVendorMfaSignIn({
         loginValue: vendorId,
         password,
-        appVerifier: recaptchaRef.current,
+        appVerifier: verifier,
       });
 
       if (result.status === "needs-enrollment") {
         router.push("/VendorSetupMfa");
+        return;
+      }
+
+      if (result.status === "needs-email-verification") {
+        router.push("/VendorVerifyEmail");
         return;
       }
 
@@ -217,14 +241,24 @@ function VendorLoginContent() {
                       <label className="mb-2 block text-sm font-medium text-[#4e433e]">
                         Password
                       </label>
-                      <input
-                        type="password"
-                        placeholder="Enter your password"
-                        value={password}
-                        onChange={(event) => setPassword(event.target.value)}
-                        required
-                        className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Enter your password"
+                          value={password}
+                          onChange={(event) => setPassword(event.target.value)}
+                          required
+                          className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 pr-12 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((current) => !current)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8f756d]"
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                        >
+                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
                     </div>
                   </>
                 ) : (
@@ -293,6 +327,12 @@ function VendorLoginContent() {
                   {signedUpBusinessName ? ` for ${signedUpBusinessName}` : ""}.
                   {signedUpVendorId ? ` Your vendor ID is ${signedUpVendorId}.` : ""}
                   {" "}Please log in to continue.
+                </p>
+              ) : null}
+
+              {emailVerified ? (
+                <p className="mt-4 rounded-2xl border border-[#d9e7d8] bg-[#f5fbf4] px-4 py-3 text-sm text-[#4e7a46]">
+                  Your vendor email is verified. Log in once more to finish OTP setup securely.
                 </p>
               ) : null}
 

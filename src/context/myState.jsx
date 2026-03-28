@@ -594,10 +594,10 @@ export default function MyState({ children }) {
     ].filter(Boolean);
 
     const newListing = {
-      id: `LIST-${Date.now().toString().slice(-4)}`,
+      id: listingInput.id || `LIST-${Date.now().toString().slice(-4)}`,
       name: listingInput.productName,
       category: listingInput.category,
-      image: "/lengha.jpg",
+      image: listingInput.image || "/lengha.jpg",
       price: parsedPrice,
       securityDeposit: parsedDeposit,
       availability:
@@ -648,6 +648,7 @@ export default function MyState({ children }) {
           ...listing,
           name: listingInput.productName,
           category: listingInput.category,
+          image: listingInput.image || listing.image,
           price: parsedPrice,
           securityDeposit: parsedDeposit,
           availability:

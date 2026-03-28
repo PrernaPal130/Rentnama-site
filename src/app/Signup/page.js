@@ -1,32 +1,60 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
-  Eye,
-  EyeOff,
   Heart,
   ShieldCheck,
+  Smartphone,
 } from "lucide-react";
 import { useAuthData } from "../../context/authContext";
+import { createMfaRecaptcha } from "../../lib/firebase";
 
 export default function SignupPage() {
   const router = useRouter();
-  const { firebaseReady, logout, signupCustomer } = useAuthData();
+  const { firebaseReady, beginCustomerPhoneAuth, completeCustomerPhoneAuth } =
+    useAuthData();
   const [name, setName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [confirmationResult, setConfirmationResult] = useState(null);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const recaptchaRef = useRef(null);
 
-  async function handleSignup(event) {
+  async function buildFreshRecaptcha() {
+    if (recaptchaRef.current?.clear) {
+      recaptchaRef.current.clear();
+    }
+
+    recaptchaRef.current = null;
+
+    const container = document.getElementById("customer-signup-recaptcha");
+    if (container) {
+      container.innerHTML = "";
+    }
+
+    const verifier = createMfaRecaptcha("customer-signup-recaptcha");
+    await verifier.render();
+    recaptchaRef.current = verifier;
+    return verifier;
+  }
+
+  useEffect(() => {
+    return () => {
+      if (recaptchaRef.current?.clear) {
+        recaptchaRef.current.clear();
+      }
+      recaptchaRef.current = null;
+    };
+  }, []);
+
+  async function handleSendOtp(event) {
     event.preventDefault();
 
     if (!firebaseReady) {
@@ -34,23 +62,46 @@ export default function SignupPage() {
       return;
     }
 
-    if (password !== confirmPassword) {
-      setError("Password and confirm password must match.");
-      return;
+    try {
+      setIsSubmitting(true);
+      setError("");
+      setInfo("");
+      const verifier = await buildFreshRecaptcha();
+
+      const nextConfirmationResult = await beginCustomerPhoneAuth(
+        phoneNumber,
+        verifier
+      );
+
+      setConfirmationResult(nextConfirmationResult);
+      setInfo("OTP sent to your phone number.");
+    } catch (signupError) {
+      setError(signupError.message || "Unable to send OTP right now.");
+    } finally {
+      setIsSubmitting(false);
     }
+  }
+
+  async function handleVerifyOtp(event) {
+    event.preventDefault();
 
     try {
       setIsSubmitting(true);
       setError("");
-      await signupCustomer({ name, phoneNumber, email, password });
-      await logout();
-      router.push("/LoginSign?signup=success");
+      await completeCustomerPhoneAuth(confirmationResult, otp, {
+        name,
+        phoneNumber,
+        email,
+      });
+      router.push("/");
     } catch (signupError) {
       setError(signupError.message || "Unable to create your account right now.");
     } finally {
       setIsSubmitting(false);
     }
   }
+
+  const otpStep = Boolean(confirmationResult);
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#fff8f4_0%,#f7ebe5_52%,#fffdfb_100%)] px-4 py-8 sm:px-6 lg:px-8">
@@ -76,11 +127,23 @@ export default function SignupPage() {
                 Create your RentNama account.
               </h1>
               <p className="mt-5 max-w-xl text-sm leading-7 text-[#625650]">
-                Save your wishlist, manage addresses, place orders, and keep all
-                your rental looks in one account.
+                Verify your phone number once and keep your wishlist, addresses,
+                and rental orders connected to one easy customer account.
               </p>
 
               <div className="mt-8 space-y-4">
+                <div className="rounded-[28px] border border-white/75 bg-white/70 p-5 backdrop-blur-sm">
+                  <div className="flex items-center gap-3">
+                    <Smartphone className="text-[#b86f5f]" size={20} />
+                    <p className="text-sm font-semibold text-[#2f2622]">
+                      Phone-first access
+                    </p>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-[#625650]">
+                    Use your phone number for a faster, mobile-friendly login experience.
+                  </p>
+                </div>
+
                 <div className="rounded-[28px] border border-white/75 bg-white/70 p-5 backdrop-blur-sm">
                   <div className="flex items-center gap-3">
                     <Heart className="text-[#b86f5f]" size={20} />
@@ -89,8 +152,7 @@ export default function SignupPage() {
                     </p>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-[#625650]">
-                    Build your wishlist, track your favorite outfits, and keep
-                    everything ready for your next event.
+                    Keep your saved looks, addresses, and orders ready across sessions.
                   </p>
                 </div>
 
@@ -98,12 +160,11 @@ export default function SignupPage() {
                   <div className="flex items-center gap-3">
                     <ShieldCheck className="text-[#b86f5f]" size={20} />
                     <p className="text-sm font-semibold text-[#2f2622]">
-                      Faster future checkouts
+                      Secure verification
                     </p>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-[#625650]">
-                    Save your details once so ordering, address selection, and
-                    outfit planning feel much smoother next time.
+                    Verify the one-time code sent to your phone to finish setup.
                   </p>
                 </div>
               </div>
@@ -116,115 +177,113 @@ export default function SignupPage() {
                 Create Account
               </p>
               <h2 className="mt-3 text-3xl font-semibold text-[#2f2622]">
-                Get started
+                {otpStep ? "Verify OTP" : "Get started"}
               </h2>
 
-              <form onSubmit={handleSignup} className="mt-8 space-y-5">
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-[#4e433e]">
-                    Full name
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    required
-                    className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
-                  />
-                </div>
+              <div id="customer-signup-recaptcha" className="mt-4" />
 
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-[#4e433e]">
-                    Email address
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    required
-                    className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
-                  />
-                </div>
+              <form
+                onSubmit={otpStep ? handleVerifyOtp : handleSendOtp}
+                className="mt-8 space-y-5"
+              >
+                {!otpStep ? (
+                  <>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                        Full name
+                      </label>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(event) => setName(event.target.value)}
+                        required
+                        className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                      />
+                    </div>
 
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-[#4e433e]">
-                    Phone number
-                  </label>
-                  <input
-                    type="tel"
-                    value={phoneNumber}
-                    onChange={(event) => setPhoneNumber(event.target.value)}
-                    required
-                    placeholder="+91 98765 43210"
-                    className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
-                  />
-                </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                        Phone number
+                      </label>
+                      <input
+                        type="tel"
+                        value={phoneNumber}
+                        onChange={(event) => setPhoneNumber(event.target.value)}
+                        required
+                        placeholder="+91 98765 43210"
+                        className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                      />
+                    </div>
 
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-[#4e433e]">
-                    Create password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      required
-                      className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 pr-12 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
-                    />
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                        Email address
+                      </label>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        placeholder="Optional for order updates"
+                        className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="rounded-[28px] border border-[#efd9d0] bg-[#fff8f4] p-4 text-sm leading-6 text-[#765d56]">
+                      OTP sent to <span className="font-semibold">{phoneNumber}</span>.
+                      Enter it to create your customer account.
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                        OTP
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Enter 6-digit OTP"
+                        value={otp}
+                        onChange={(event) => setOtp(event.target.value)}
+                        required
+                        className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                      />
+                    </div>
+
                     <button
                       type="button"
-                      onClick={() => setShowPassword((current) => !current)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8f756d]"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      onClick={() => {
+                        setConfirmationResult(null);
+                        setOtp("");
+                        setInfo("");
+                      }}
+                      className="text-sm font-medium text-[#b46c5b] hover:underline"
                     >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      Change details
                     </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-[#4e433e]">
-                    Confirm password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showConfirmPassword ? "text" : "password"}
-                      value={confirmPassword}
-                      onChange={(event) => setConfirmPassword(event.target.value)}
-                      required
-                      className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 pr-12 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowConfirmPassword((current) => !current)
-                      }
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8f756d]"
-                      aria-label={
-                        showConfirmPassword
-                          ? "Hide confirm password"
-                          : "Show confirm password"
-                      }
-                    >
-                      {showConfirmPassword ? (
-                        <EyeOff size={18} />
-                      ) : (
-                        <Eye size={18} />
-                      )}
-                    </button>
-                  </div>
-                </div>
+                  </>
+                )}
 
                 <button
                   type="submit"
                   disabled={isSubmitting}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#c97762] py-3.5 text-sm font-semibold text-white transition hover:bg-[#b96954]"
                 >
-                  {isSubmitting ? "Creating account..." : "Create account"}
+                  {otpStep
+                    ? isSubmitting
+                      ? "Verifying..."
+                      : "Verify OTP and Continue"
+                    : isSubmitting
+                      ? "Sending OTP..."
+                      : "Send OTP"}
                   <ArrowRight size={16} />
                 </button>
               </form>
+
+              {info ? (
+                <p className="mt-4 rounded-2xl border border-[#d9e7d8] bg-[#f5fbf4] px-4 py-3 text-sm text-[#4e7a46]">
+                  {info}
+                </p>
+              ) : null}
 
               {error ? (
                 <p className="mt-4 rounded-2xl border border-[#efd6ce] bg-[#fff6f2] px-4 py-3 text-sm text-[#9e5949]">

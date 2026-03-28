@@ -7,6 +7,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Building2,
+  Eye,
+  EyeOff,
   FileBadge2,
   Store,
 } from "lucide-react";
@@ -22,10 +24,13 @@ export default function VendorSignupPage() {
     email: "",
     businessType: "",
     password: "",
+    confirmPassword: "",
   });
   const [error, setError] = useState("");
   const [createdVendorId, setCreatedVendorId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -43,12 +48,21 @@ export default function VendorSignupPage() {
       return;
     }
 
+    if (formData.password !== formData.confirmPassword) {
+      setError("Password and confirm password must match.");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setError("");
       const result = await signupVendor(formData);
       setCreatedVendorId(result.vendorId);
-      router.push("/VendorSetupMfa");
+      router.push(
+        `/VendorVerifyEmail?vendorId=${encodeURIComponent(
+          result.vendorId
+        )}&businessName=${encodeURIComponent(formData.businessName)}`
+      );
     } catch (signupError) {
       setError(signupError.message || "Unable to create vendor account right now.");
     } finally {
@@ -206,15 +220,58 @@ export default function VendorSignupPage() {
                   <label className="mb-2 block text-sm font-medium text-[#4e433e]">
                     Password
                   </label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                    placeholder="Create a secure password"
-                    className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      name="password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      required
+                      placeholder="Create a secure password"
+                      className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 pr-12 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((current) => !current)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8f756d]"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                    Confirm password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      name="confirmPassword"
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      required
+                      placeholder="Confirm your password"
+                      className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 pr-12 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword((current) => !current)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8f756d]"
+                      aria-label={
+                        showConfirmPassword
+                          ? "Hide confirm password"
+                          : "Show confirm password"
+                      }
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff size={18} />
+                      ) : (
+                        <Eye size={18} />
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 <button

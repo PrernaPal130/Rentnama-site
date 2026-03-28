@@ -49,6 +49,11 @@ export function CustomerGuard({ children }) {
   const { currentUser, profile, authLoading } = useAuthData();
   const router = useRouter();
   const pathname = usePathname();
+  const isCustomerSetupRoute = pathname?.startsWith("/CustomerSetupProfile");
+  const needsCustomerProfile =
+    currentUser &&
+    profile?.role === "customer" &&
+    (!profile?.name || !profile?.email);
 
   useEffect(() => {
     if (authLoading) {
@@ -62,14 +67,31 @@ export function CustomerGuard({ children }) {
 
     if (profile?.role === "vendor") {
       router.replace("/VendorDashboard");
+      return;
     }
-  }, [authLoading, currentUser, pathname, profile, router]);
+
+    if (needsCustomerProfile && !isCustomerSetupRoute) {
+      router.replace("/CustomerSetupProfile");
+    }
+  }, [
+    authLoading,
+    currentUser,
+    isCustomerSetupRoute,
+    needsCustomerProfile,
+    pathname,
+    profile,
+    router,
+  ]);
 
   if (authLoading) {
     return <GuardLoading title="Loading your customer account" />;
   }
 
-  if (!currentUser || profile?.role === "vendor") {
+  if (
+    !currentUser ||
+    profile?.role === "vendor" ||
+    (needsCustomerProfile && !isCustomerSetupRoute)
+  ) {
     return (
       <GuardFallback
         title="Customer access required"
@@ -87,6 +109,9 @@ export function VendorGuard({ children }) {
   const router = useRouter();
   const pathname = usePathname();
   const isSetupRoute = pathname?.startsWith("/VendorSetupMfa");
+  const isVerifyRoute = pathname?.startsWith("/VendorVerifyEmail");
+  const needsEmailVerification =
+    currentUser && profile?.role === "vendor" && !currentUser.emailVerified;
   const needsMfaSetup =
     currentUser && profile?.role === "vendor" && getEnrolledFactors(currentUser).length === 0;
 
@@ -105,10 +130,25 @@ export function VendorGuard({ children }) {
       return;
     }
 
+    if (needsEmailVerification && !isVerifyRoute) {
+      router.replace("/VendorVerifyEmail");
+      return;
+    }
+
     if (needsMfaSetup && !isSetupRoute) {
       router.replace("/VendorSetupMfa");
     }
-  }, [authLoading, currentUser, isSetupRoute, needsMfaSetup, pathname, profile, router]);
+  }, [
+    authLoading,
+    currentUser,
+    isSetupRoute,
+    isVerifyRoute,
+    needsEmailVerification,
+    needsMfaSetup,
+    pathname,
+    profile,
+    router,
+  ]);
 
   if (authLoading) {
     return <GuardLoading title="Loading your vendor account" />;
@@ -117,6 +157,7 @@ export function VendorGuard({ children }) {
   if (
     !currentUser ||
     (profile?.role && profile.role !== "vendor") ||
+    (needsEmailVerification && !isVerifyRoute) ||
     (needsMfaSetup && !isSetupRoute)
   ) {
     return (
