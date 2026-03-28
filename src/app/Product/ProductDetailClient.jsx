@@ -5,10 +5,15 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowLeft,
+  ArrowRight,
   Heart,
+  Clock3,
+  MapPin,
+  Phone,
   ShieldCheck,
   Sparkles,
   Star,
+  Store,
   Truck,
 } from "lucide-react";
 import { useAppData } from "../../context/myContext";
@@ -28,6 +33,13 @@ export default function ProductDetailClient({ productId }) {
   const [rentalStartDate, setRentalStartDate] = useState("2026-03-28");
   const [rentalEndDate, setRentalEndDate] = useState("2026-04-02");
   const [cartFeedback, setCartFeedback] = useState(false);
+  const storeName = product?.shopName || "Apna Closet Signature Studio";
+  const storeLocation = product?.storeLocation || "SCO 12-14, Sector 17C, Chandigarh";
+  const storeContact = product?.storeContact || "+91 98765 43210";
+  const storeHours = product?.storeHours || "11:00 AM - 8:00 PM";
+  const offlineOrderNote =
+    product?.offlineOrderNote ||
+    "Visit the store for fabric inspection, styling help, fittings, and offline order placement.";
 
   if (!product) {
     return (
@@ -68,6 +80,11 @@ export default function ProductDetailClient({ productId }) {
     window.setTimeout(() => {
       setCartFeedback(false);
     }, 1600);
+  }
+
+  function scrollToStoreDetails() {
+    const section = document.getElementById("store-details");
+    section?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   return (
@@ -163,6 +180,44 @@ export default function ProductDetailClient({ productId }) {
                   <div className="inline-flex items-center gap-2 rounded-full bg-[#fcf1ed] px-4 py-2 text-[#9e5949]">
                     <Truck size={16} />
                     Delivery in 2-3 days
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-3xl border border-[#efe1dc] bg-[#fffaf8] p-5">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-2xl bg-white p-4 shadow-sm">
+                      <div className="flex items-center gap-2 text-[#b46c5b]">
+                        <Store size={16} />
+                        <p className="text-sm font-semibold text-gray-900">Partner shop</p>
+                      </div>
+                      <p className="mt-2 text-sm text-gray-700">
+                        {storeName}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Listed on subscription with RentNama
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl bg-white p-4 shadow-sm">
+                      <div className="flex items-center gap-2 text-[#b46c5b]">
+                        <MapPin size={16} />
+                        <p className="text-sm font-semibold text-gray-900">Visit store offline</p>
+                      </div>
+                      <p className="mt-2 text-sm text-gray-700">
+                        {storeLocation}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Visit the store to inspect the outfit or place an offline order.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={scrollToStoreDetails}
+                        className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#fff1ec] px-4 py-2 text-sm font-semibold text-[#b96954] transition hover:bg-[#fde7df]"
+                      >
+                        View store details
+                        <ArrowRight size={15} />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -275,7 +330,9 @@ export default function ProductDetailClient({ productId }) {
                     <ShieldCheck size={18} className="mt-0.5 text-[#b46c5b]" />
                     <p>
                       Every rental is quality-checked before dispatch, and your
-                      security deposit is refundable after return inspection.
+                      security deposit is refundable after return inspection. Online
+                      rentals earn through platform commission, while offline store
+                      visits help you discover the outfit in person.
                     </p>
                   </div>
                 </div>
@@ -367,6 +424,74 @@ export default function ProductDetailClient({ productId }) {
                 </div>
               </section>
             </div>
+
+            <section
+              id="store-details"
+              className="mt-8 rounded-3xl border border-[#efe1dc] bg-[#fffaf8] p-6 shadow-sm"
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#bc7766]">
+                Store Details
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-gray-900">
+                Visit this partner boutique offline
+              </h2>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-gray-700">
+                RentNama lets customers discover the physical boutique behind the
+                outfit. You can visit the store to inspect the garment, check the
+                finishing, try styling options, or place an offline order directly.
+              </p>
+
+              <div className="mt-6 grid gap-4 md:grid-cols-3">
+                <div className="rounded-2xl border border-[#efe0db] bg-white p-5">
+                  <div className="flex items-center gap-2 text-[#b46c5b]">
+                    <Store size={16} />
+                    <p className="text-sm font-semibold text-gray-900">Shop name</p>
+                  </div>
+                  <p className="mt-3 text-base font-medium text-gray-900">
+                    {storeName}
+                  </p>
+                  <p className="mt-2 text-sm text-gray-600">
+                    Vendor listed on the {product.subscriptionPlan || "Growth"} plan.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-[#efe0db] bg-white p-5">
+                  <div className="flex items-center gap-2 text-[#b46c5b]">
+                    <MapPin size={16} />
+                    <p className="text-sm font-semibold text-gray-900">Location</p>
+                  </div>
+                  <p className="mt-3 text-base font-medium text-gray-900">
+                    {storeLocation}
+                  </p>
+                  <p className="mt-2 text-sm text-gray-600">
+                    Available for both online rentals and offline store visits.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-[#efe0db] bg-white p-5">
+                  <div className="flex items-center gap-2 text-[#b46c5b]">
+                    <Phone size={16} />
+                    <p className="text-sm font-semibold text-gray-900">Contact</p>
+                  </div>
+                  <p className="mt-3 text-base font-medium text-gray-900">
+                    {storeContact}
+                  </p>
+                  <div className="mt-2 flex items-center gap-2 text-sm text-gray-600">
+                    <Clock3 size={14} />
+                    <span>{storeHours}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-[#efe0db] bg-white p-5">
+                <p className="text-sm font-semibold text-gray-900">
+                  Offline order support
+                </p>
+                <p className="mt-2 text-sm leading-7 text-gray-700">
+                  {offlineOrderNote}
+                </p>
+              </div>
+            </section>
           </section>
         </div>
       </main>

@@ -6,7 +6,9 @@ import {
   ArrowLeft,
   CalendarDays,
   Clock3,
+  HandCoins,
   LogOut,
+  MapPin,
   PackageCheck,
   Plus,
   Store,
@@ -28,6 +30,13 @@ export default function VendorDashboardPage() {
   const upcomingRentals = vendorBookings.length;
   const repeatCustomers = new Set(vendorBookings.map((booking) => booking.customer))
     .size;
+  const activeSubscription = vendorListings[0]?.subscriptionPlan || "Growth";
+  const onlineCommissionRate = vendorListings[0]?.onlineCommissionRate || 18;
+  const offlineVisitLeads = vendorBookings.filter((booking) => booking.visitLead).length;
+  const monthlyEarnings = vendorBookings
+    .filter((booking) => ["Accepted", "Ready", "Picked Up", "Returned"].includes(booking.status))
+    .reduce((sum, booking) => sum + Number(booking.amount || 0), 0);
+  const monthlyCommission = Math.round((monthlyEarnings * onlineCommissionRate) / 100);
 
   const overviewCards = [
     {
@@ -50,6 +59,13 @@ export default function VendorDashboardPage() {
       detail: "Customers currently active in the pipeline",
       href: "/VendorDashboard/Bookings",
       icon: <Users size={20} />,
+    },
+    {
+      title: "Offline Visit Leads",
+      value: `${offlineVisitLeads}`.padStart(2, "0"),
+      detail: "Customers who may visit the store before ordering",
+      href: "/VendorDashboard/Bookings",
+      icon: <MapPin size={20} />,
     },
   ];
 
@@ -88,7 +104,9 @@ export default function VendorDashboardPage() {
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-gray-600">
                 Manage listings, review booking requests, and track active
-                rentals from one vendor workspace.
+                rentals from one vendor workspace. RentNama supports your shop
+                through vendor subscriptions, online order commissions, and
+                offline store discovery.
               </p>
             </div>
 
@@ -125,7 +143,7 @@ export default function VendorDashboardPage() {
             </div>
           </div>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {overviewCards.map((card) => (
               <Link
                 key={card.title}
@@ -267,6 +285,82 @@ export default function VendorDashboardPage() {
                   <PackageCheck size={18} className="text-[#b46c5b]" />
                 </Link>
               </div>
+            </section>
+          </div>
+
+          <div className="mt-6 grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+            <section className="rounded-3xl border border-[#efe1dc] bg-white p-5 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#bc7766]">
+                Subscription & Commission
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-gray-900">
+                Your RentNama business model
+              </h2>
+
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl border border-[#efe0db] bg-[#fffaf8] p-4">
+                  <p className="text-sm text-gray-500">Subscription status</p>
+                  <p className="mt-2 text-xl font-semibold text-gray-900">
+                    {activeSubscription} Plan
+                  </p>
+                  <p className="mt-2 text-sm text-gray-600">
+                    Keeps your shop visible on RentNama and unlocks listing access.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-[#efe0db] bg-[#fffaf8] p-4">
+                  <p className="text-sm text-gray-500">Online commission rate</p>
+                  <p className="mt-2 text-xl font-semibold text-gray-900">
+                    {onlineCommissionRate}%
+                  </p>
+                  <p className="mt-2 text-sm text-gray-600">
+                    Applied only to rentals completed online through the platform.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-[#efe1dc] bg-gradient-to-r from-white to-[#fff7f3] p-5 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#f8e5df] text-[#9e5949]">
+                  <HandCoins size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#bc7766]">
+                    Earnings Snapshot
+                  </p>
+                  <h2 className="text-2xl font-semibold text-gray-900">
+                    Online performance this month
+                  </h2>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                <div className="rounded-2xl border border-[#efe0db] bg-white/90 p-4">
+                  <p className="text-sm text-gray-500">Gross rental value</p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-900">
+                    Rs. {monthlyEarnings.toLocaleString("en-IN")}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-[#efe0db] bg-white/90 p-4">
+                  <p className="text-sm text-gray-500">Platform commission</p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-900">
+                    Rs. {monthlyCommission.toLocaleString("en-IN")}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-[#efe0db] bg-white/90 p-4">
+                  <p className="text-sm text-gray-500">Offline visit leads</p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-900">
+                    {offlineVisitLeads}
+                  </p>
+                </div>
+              </div>
+
+              <p className="mt-4 text-sm leading-7 text-gray-600">
+                Customers can discover the shop location from product pages and
+                search results, then either visit the store offline or place the
+                order online through RentNama.
+              </p>
             </section>
           </div>
         </section>

@@ -22,6 +22,7 @@ function normalizeValue(value) {
 }
 
 function detectBrand(product) {
+  if (product.shopName) return product.shopName;
   const title = `${product.name} ${product.subtitle}`.toLowerCase();
   if (title.includes("manish malhotra")) return "Manish Malhotra";
   if (title.includes("sabyasachi")) return "Sabyasachi";
@@ -43,6 +44,7 @@ function detectColor(product) {
 }
 
 function detectShop(product) {
+  if (product.shopName) return product.shopName;
   const brand = detectBrand(product);
   if (brand === "Tasva") return "Tasva Studio";
   if (brand === "Sabyasachi") return "Sabyasachi Rental House";
@@ -52,6 +54,7 @@ function detectShop(product) {
 }
 
 function detectLocation(product) {
+  if (product.storeLocation) return product.storeLocation;
   const title = `${product.name} ${product.subtitle}`.toLowerCase();
   const shop = detectShop(product);
   if (shop.includes("Sabyasachi")) return "Kolkata";

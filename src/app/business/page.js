@@ -41,7 +41,7 @@ const steps = [
 
 const partnerBenefits = [
   "Reach customers who want occasionwear without the full purchase cost.",
-  "Use RentNama as both a rental channel and a store-discovery channel.",
+  "Use RentNama as both an online rental channel and an offline store-discovery channel.",
   "Showcase premium inventory to users who are actively shopping for events.",
   "Manage catalog, bookings, and blocked dates from a dedicated vendor panel.",
 ];
@@ -140,6 +140,11 @@ export default function BusinessPage() {
                       We also help drive offline discovery. If customers want to
                       visit your store, inspect garments in person, or buy them
                       offline, RentNama can redirect them to your shop.
+                    </p>
+                    <p>
+                      This gives vendors two clear revenue paths: subscription-backed
+                      visibility plus store visits, and commission-based online
+                      rentals completed through the platform.
                     </p>
                   </div>
                 </section>
