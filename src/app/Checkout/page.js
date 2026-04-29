@@ -16,8 +16,44 @@ import {
   Wallet,
 } from "lucide-react";
 import { useAppData } from "../../context/myContext";
+import { useAuthData } from "../../context/authContext";
+
+function loadRazorpayCheckout() {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined") {
+      reject(new Error("Payment checkout is only available in the browser."));
+      return;
+    }
+
+    if (window.Razorpay) {
+      resolve(window.Razorpay);
+      return;
+    }
+
+    const existingScript = document.querySelector(
+      'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+    );
+
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(window.Razorpay));
+      existingScript.addEventListener("error", () =>
+        reject(new Error("Could not load Razorpay checkout."))
+      );
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve(window.Razorpay);
+    script.onerror = () =>
+      reject(new Error("Could not load Razorpay checkout."));
+    document.body.appendChild(script);
+  });
+}
 
 export default function CheckoutPage() {
+  const { currentUser } = useAuthData();
   const {
     cart,
     addresses,
@@ -31,6 +67,9 @@ export default function CheckoutPage() {
   } =
     useAppData();
   const router = useRouter();
+  const [paymentError, setPaymentError] = useState("");
+  const [paymentInfo, setPaymentInfo] = useState("");
+  const [isOpeningCheckout, setIsOpeningCheckout] = useState(false);
   const [checkoutMode, setCheckoutMode] = useState("");
   const [selectedAddressParam, setSelectedAddressParam] = useState("");
 
@@ -93,30 +132,126 @@ export default function CheckoutPage() {
   const discount = cartItems.length >= 2 ? 1000 : 0;
   const total = subtotal + securityDeposit + deliveryFee - discount;
 
-  function handlePlaceOrder() {
+  async function handlePlaceOrder() {
     if (!selectedAddressId || cartItems.length === 0) {
       return;
     }
 
-    placeOrder({
-      addressId: selectedAddressId,
-      paymentMethod: selectedPaymentMethod,
-      totals: {
-        subtotal,
-        securityDeposit,
-        deliveryFee,
-        discount,
-        total,
-      },
-      orderItems: isDirectCheckout ? cartItems : null,
-      clearCart: !isDirectCheckout,
-    });
-
-    if (isDirectCheckout) {
-      clearDirectCheckout();
+    if (!currentUser) {
+      router.push("/LoginSign?redirect=/Checkout");
+      return;
     }
 
-    router.push("/YourOrders");
+    try {
+      setIsOpeningCheckout(true);
+      setPaymentError("");
+      setPaymentInfo("");
+
+      const RazorpayCheckout = await loadRazorpayCheckout();
+      const orderResponse = await fetch("/api/payments/create-order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          purpose: "checkout_order",
+          customerId: currentUser.uid,
+          amount: Math.round(total * 100),
+        }),
+      });
+      const orderPayload = await orderResponse.json();
+
+      if (!orderResponse.ok) {
+        throw new Error(
+          orderPayload?.error || "Could not start the checkout payment."
+        );
+      }
+
+      const options = {
+        key: orderPayload.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount: orderPayload.amount,
+        currency: orderPayload.currency,
+        name: "RentNama",
+        description: orderPayload.description || "RentNama Rental Order",
+        order_id: orderPayload.orderId,
+        prefill: {
+          name: selectedAddress?.name || "",
+          email: "",
+          contact: selectedAddress?.phone || "",
+        },
+        theme: {
+          color: "#c97762",
+        },
+        handler: async (response) => {
+          try {
+            const verifyResponse = await fetch("/api/payments/verify", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(response),
+            });
+            const verifyPayload = await verifyResponse.json();
+
+            if (!verifyResponse.ok || !verifyPayload?.verified) {
+              throw new Error(
+                verifyPayload?.error || "Payment verification failed."
+              );
+            }
+
+            placeOrder({
+              addressId: selectedAddressId,
+              paymentMethod: selectedPaymentMethod,
+              totals: {
+                subtotal,
+                securityDeposit,
+                deliveryFee,
+                discount,
+                total,
+              },
+              orderItems: isDirectCheckout ? cartItems : null,
+              clearCart: !isDirectCheckout,
+            });
+
+            if (isDirectCheckout) {
+              clearDirectCheckout();
+            }
+
+            setPaymentInfo("Payment verified. Your rental order has been placed.");
+            router.push("/YourOrders");
+          } catch (verificationError) {
+            setPaymentError(
+              verificationError instanceof Error
+                ? verificationError.message
+                : "Payment verification failed."
+            );
+          } finally {
+            setIsOpeningCheckout(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setIsOpeningCheckout(false);
+          },
+        },
+      };
+
+      const checkout = new RazorpayCheckout(options);
+      checkout.on("payment.failed", (response) => {
+        setPaymentError(
+          response?.error?.description ||
+            "Payment was not completed. Please try again."
+        );
+      });
+      checkout.open();
+    } catch (error) {
+      setPaymentError(
+        error instanceof Error
+          ? error.message
+          : "Could not start the checkout payment."
+      );
+      setIsOpeningCheckout(false);
+    }
   }
 
   return (
@@ -569,14 +704,26 @@ export default function CheckoutPage() {
               <button
                 type="button"
                 onClick={handlePlaceOrder}
-                disabled={!selectedAddressId || cartItems.length === 0}
+                disabled={!selectedAddressId || cartItems.length === 0 || isOpeningCheckout}
                 className="mt-6 w-full rounded-full bg-[#c97762] px-5 py-3 font-semibold text-white transition-colors hover:bg-[#b96954] disabled:cursor-not-allowed disabled:bg-[#dfb5aa]"
               >
-                Place Order
+                {isOpeningCheckout ? "Opening payment..." : "Pay and Place Order"}
               </button>
 
+              {paymentInfo ? (
+                <p className="mt-4 rounded-2xl border border-[#d9e7d8] bg-[#f5fbf4] px-4 py-3 text-sm text-[#4e7a46]">
+                  {paymentInfo}
+                </p>
+              ) : null}
+
+              {paymentError ? (
+                <p className="mt-4 rounded-2xl border border-[#efd6ce] bg-[#fff6f2] px-4 py-3 text-sm text-[#9e5949]">
+                  {paymentError}
+                </p>
+              ) : null}
+
               <p className="mt-3 text-center text-xs text-gray-500">
-                Your selected address and payment method will be saved with this order.
+                Your selected address and payment method will be saved with this order after successful payment verification.
               </p>
             </aside>
           </div>

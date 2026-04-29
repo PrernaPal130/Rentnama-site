@@ -22,19 +22,36 @@ export async function POST(request) {
     const body = await request.json().catch(() => ({}));
     const purpose = body?.purpose || "store_access_pass";
     const customerId = body?.customerId || "guest";
+    const requestedAmount = Number(body?.amount || 0);
 
-    if (purpose !== "store_access_pass") {
+    const razorpay = getRazorpayClient();
+    let amount = STORE_ACCESS_AMOUNT_PAISE;
+    let description = "RentNama Store Access Pass";
+
+    if (purpose === "checkout_order") {
+      if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+        return NextResponse.json(
+          { error: "A valid checkout amount is required." },
+          { status: 400 }
+        );
+      }
+
+      amount = requestedAmount;
+      description = "RentNama Rental Order";
+    } else if (purpose !== "store_access_pass") {
       return NextResponse.json(
         { error: "Unsupported payment purpose." },
         { status: 400 }
       );
     }
 
-    const razorpay = getRazorpayClient();
+    const receiptPrefix =
+      purpose === "checkout_order" ? "checkout" : "store-pass";
+
     const order = await razorpay.orders.create({
-      amount: STORE_ACCESS_AMOUNT_PAISE,
+      amount,
       currency: "INR",
-      receipt: `store-pass-${customerId}-${Date.now()}`.slice(0, 40),
+      receipt: `${receiptPrefix}-${customerId}-${Date.now()}`.slice(0, 40),
       notes: {
         purpose,
         customerId,
@@ -46,7 +63,7 @@ export async function POST(request) {
       amount: order.amount,
       currency: order.currency,
       keyId: process.env.RAZORPAY_KEY_ID,
-      description: "RentNama Store Access Pass",
+      description,
     });
   } catch (error) {
     return NextResponse.json(
