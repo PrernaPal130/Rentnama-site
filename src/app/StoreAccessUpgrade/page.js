@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -13,7 +14,7 @@ import {
 import { useAppData } from "../../context/myContext";
 import { useAuthData } from "../../context/authContext";
 
-export default function StoreAccessUpgradePage() {
+function StoreAccessUpgradeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { currentUser, profile } = useAuthData();
@@ -148,5 +149,25 @@ export default function StoreAccessUpgradePage() {
         </section>
       </div>
     </main>
+  );
+}
+
+function StoreAccessUpgradeFallback() {
+  return (
+    <main className="min-h-screen bg-[#fffaf7] px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-5xl">
+        <section className="mt-5 rounded-[36px] border border-[#ecd8d1] bg-white p-8 shadow-sm">
+          <p className="text-sm text-[#625650]">Loading store access options...</p>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+export default function StoreAccessUpgradePage() {
+  return (
+    <Suspense fallback={<StoreAccessUpgradeFallback />}>
+      <StoreAccessUpgradeContent />
+    </Suspense>
   );
 }
