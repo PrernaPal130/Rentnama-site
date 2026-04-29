@@ -285,16 +285,6 @@ function VendorSetupMfaInner() {
 
               <div id="vendor-mfa-recaptcha" className="mt-6" />
 
-              <button
-                type="button"
-                onClick={handleSendOtp}
-                disabled={isSending || !phoneNumber}
-                className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#c97762] py-3.5 text-sm font-semibold text-white transition hover:bg-[#b96954] disabled:cursor-not-allowed disabled:bg-[#d6a89c]"
-              >
-                {isSending ? "Sending OTP..." : "Send OTP"}
-                <ArrowRight size={16} />
-              </button>
-
               <form onSubmit={handleVerifyOtp} className="mt-6 space-y-5">
                 <div className="space-y-3">
                   <label className="mb-2 block text-sm font-medium text-[#4e433e]">
