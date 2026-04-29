@@ -238,34 +238,32 @@ function VendorSetupMfaInner() {
                   />
                 </div>
 
-                {needsPasswordRefresh ? (
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-[#4e433e]">
-                      Confirm vendor password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Enter your password again"
-                        value={confirmPassword}
-                        onChange={(event) => setConfirmPassword(event.target.value)}
-                        required
-                        className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 pr-12 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((current) => !current)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8f756d]"
-                        aria-label={showPassword ? "Hide password" : "Show password"}
-                      >
-                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                      </button>
-                    </div>
-                    <p className="mt-2 text-xs leading-5 text-[#7b6660]">
-                      Firebase is asking for a fresh secure session before OTP enrollment.
-                    </p>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                    Confirm vendor password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Enter your password again"
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      required={needsPasswordRefresh}
+                      className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 pr-12 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((current) => !current)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8f756d]"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
                   </div>
-                ) : null}
+                  <p className="mt-2 text-xs leading-5 text-[#7b6660]">
+                    Keep this ready in case Firebase asks for a fresh secure session before finishing OTP enrollment.
+                  </p>
+                </div>
 
                 <button
                   type="submit"
