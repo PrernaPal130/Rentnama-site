@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -14,17 +14,54 @@ import {
 import { useAppData } from "../../context/myContext";
 import { useAuthData } from "../../context/authContext";
 
+function loadRazorpayCheckout() {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined") {
+      reject(new Error("Payment checkout is only available in the browser."));
+      return;
+    }
+
+    if (window.Razorpay) {
+      resolve(window.Razorpay);
+      return;
+    }
+
+    const existingScript = document.querySelector(
+      'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+    );
+
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(window.Razorpay));
+      existingScript.addEventListener("error", () =>
+        reject(new Error("Could not load Razorpay checkout."))
+      );
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve(window.Razorpay);
+    script.onerror = () =>
+      reject(new Error("Could not load Razorpay checkout."));
+    document.body.appendChild(script);
+  });
+}
+
 function StoreAccessUpgradeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { currentUser, profile } = useAuthData();
   const { storeAccessPassActive, viewedStoreShops, unlockStoreAccessPass } =
     useAppData();
+  const [paymentError, setPaymentError] = useState("");
+  const [paymentInfo, setPaymentInfo] = useState("");
+  const [isOpeningCheckout, setIsOpeningCheckout] = useState(false);
   const shopName = searchParams.get("shop") || "partner boutiques";
   const productId = searchParams.get("productId") || "";
   const remainingFreeViews = Math.max(0, 5 - viewedStoreShops.length);
 
-  function handleActivatePass() {
+  async function handleActivatePass() {
     if (!currentUser || profile?.role !== "customer") {
       router.push(
         `/LoginSign?redirect=${encodeURIComponent("/StoreAccessUpgrade")}`
@@ -32,14 +69,107 @@ function StoreAccessUpgradeContent() {
       return;
     }
 
-    unlockStoreAccessPass();
+    try {
+      setIsOpeningCheckout(true);
+      setPaymentError("");
+      setPaymentInfo("");
 
-    if (productId) {
-      router.push(`/Product/${productId}`);
-      return;
+      const RazorpayCheckout = await loadRazorpayCheckout();
+      const orderResponse = await fetch("/api/payments/create-order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          purpose: "store_access_pass",
+          customerId: currentUser.uid,
+        }),
+      });
+
+      const orderPayload = await orderResponse.json();
+      if (!orderResponse.ok) {
+        throw new Error(
+          orderPayload?.error || "Could not start the payment right now."
+        );
+      }
+
+      const options = {
+        key: orderPayload.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount: orderPayload.amount,
+        currency: orderPayload.currency,
+        name: "RentNama",
+        description: orderPayload.description || "Store Access Pass",
+        order_id: orderPayload.orderId,
+        prefill: {
+          name: profile?.name || currentUser.displayName || "",
+          email: profile?.email || currentUser.email || "",
+          contact: profile?.phoneNumber || "",
+        },
+        theme: {
+          color: "#c97762",
+        },
+        handler: async (response) => {
+          try {
+            const verifyResponse = await fetch("/api/payments/verify", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(response),
+            });
+            const verifyPayload = await verifyResponse.json();
+
+            if (!verifyResponse.ok || !verifyPayload?.verified) {
+              throw new Error(
+                verifyPayload?.error || "Payment verification failed."
+              );
+            }
+
+            unlockStoreAccessPass();
+            setPaymentInfo(
+              "Payment verified. Your store access pass is now active."
+            );
+
+            if (productId) {
+              router.push(`/Product/${productId}`);
+              return;
+            }
+
+            router.push("/Account");
+          } catch (verificationError) {
+            setPaymentError(
+              verificationError instanceof Error
+                ? verificationError.message
+                : "Payment verification failed."
+            );
+          } finally {
+            setIsOpeningCheckout(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setIsOpeningCheckout(false);
+          },
+        },
+      };
+
+      const checkout = new RazorpayCheckout(options);
+      checkout.on("payment.failed", (response) => {
+        setPaymentError(
+          response?.error?.description ||
+            "Payment was not completed. Please try again."
+        );
+      });
+      checkout.open();
+    } catch (error) {
+      setPaymentError(
+        error instanceof Error
+          ? error.message
+          : "Could not start the payment right now."
+      );
+    } finally {
+      setIsOpeningCheckout(false);
     }
-
-    router.push("/Account");
   }
 
   return (
@@ -106,8 +236,9 @@ function StoreAccessUpgradeContent() {
                 {storeAccessPassActive ? "Pass already active" : "Unlimited boutique access"}
               </h2>
               <p className="mt-3 text-sm leading-7 text-[#625650]">
-                For the demo, this page activates the store access pass directly.
-                Later this can be connected to a real payment gateway.
+                Use Razorpay test mode here to unlock the pass properly. After
+                successful payment verification, the store access pass is activated
+                for your customer account.
               </p>
 
               <div className="mt-8 rounded-[28px] border border-[#ecd8d1] bg-[#fffaf8] p-6">
@@ -138,12 +269,28 @@ function StoreAccessUpgradeContent() {
               <button
                 type="button"
                 onClick={handleActivatePass}
-                disabled={storeAccessPassActive}
+                disabled={storeAccessPassActive || isOpeningCheckout}
                 className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#c97762] py-3.5 text-sm font-semibold text-white transition hover:bg-[#b96954] disabled:cursor-not-allowed disabled:bg-[#dfb5aa]"
               >
-                {storeAccessPassActive ? "Pass Activated" : "Activate store access pass"}
+                {storeAccessPassActive
+                  ? "Pass Activated"
+                  : isOpeningCheckout
+                  ? "Opening payment..."
+                  : "Activate store access pass"}
                 <ArrowRight size={16} />
               </button>
+
+              {paymentInfo ? (
+                <p className="mt-4 rounded-2xl border border-[#d9e7d8] bg-[#f5fbf4] px-4 py-3 text-sm text-[#4e7a46]">
+                  {paymentInfo}
+                </p>
+              ) : null}
+
+              {paymentError ? (
+                <p className="mt-4 rounded-2xl border border-[#efd6ce] bg-[#fff6f2] px-4 py-3 text-sm text-[#9e5949]">
+                  {paymentError}
+                </p>
+              ) : null}
             </div>
           </div>
         </section>
