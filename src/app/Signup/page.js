@@ -11,6 +11,10 @@ import {
   Smartphone,
 } from "lucide-react";
 import { useAuthData } from "../../context/authContext";
+import {
+  buildIndianPhoneNumber,
+  PhoneNumberField,
+} from "../../components/PhoneNumberField";
 import { createMfaRecaptcha } from "../../lib/firebase";
 
 export default function SignupPage() {
@@ -66,10 +70,16 @@ export default function SignupPage() {
       setIsSubmitting(true);
       setError("");
       setInfo("");
+      const fullPhoneNumber = buildIndianPhoneNumber(phoneNumber);
+
+      if (phoneNumber.length !== 10 || !fullPhoneNumber) {
+        throw new Error("Enter a valid 10-digit phone number.");
+      }
+
       const verifier = await buildFreshRecaptcha();
 
       const nextConfirmationResult = await beginCustomerPhoneAuth(
-        phoneNumber,
+        fullPhoneNumber,
         verifier
       );
 
@@ -90,7 +100,7 @@ export default function SignupPage() {
       setError("");
       await completeCustomerPhoneAuth(confirmationResult, otp, {
         name,
-        phoneNumber,
+        phoneNumber: buildIndianPhoneNumber(phoneNumber),
         email,
       });
       router.push("/");
@@ -201,19 +211,11 @@ export default function SignupPage() {
                       />
                     </div>
 
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-[#4e433e]">
-                        Phone number
-                      </label>
-                      <input
-                        type="tel"
-                        value={phoneNumber}
-                        onChange={(event) => setPhoneNumber(event.target.value)}
-                        required
-                        placeholder="+91 98765 43210"
-                        className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
-                      />
-                    </div>
+                    <PhoneNumberField
+                      required
+                      value={phoneNumber}
+                      onChange={setPhoneNumber}
+                    />
 
                     <div>
                       <label className="mb-2 block text-sm font-medium text-[#4e433e]">
@@ -231,7 +233,7 @@ export default function SignupPage() {
                 ) : (
                   <>
                     <div className="rounded-[28px] border border-[#efd9d0] bg-[#fff8f4] p-4 text-sm leading-6 text-[#765d56]">
-                      OTP sent to <span className="font-semibold">{phoneNumber}</span>.
+                      OTP sent to <span className="font-semibold">{buildIndianPhoneNumber(phoneNumber)}</span>.
                       Enter it to create your customer account.
                     </div>
 

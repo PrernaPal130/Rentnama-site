@@ -13,6 +13,10 @@ import {
   Store,
 } from "lucide-react";
 import { useAuthData } from "../../context/authContext";
+import {
+  buildIndianPhoneNumber,
+  PhoneNumberField,
+} from "../../components/PhoneNumberField";
 
 export default function VendorSignupPage() {
   const router = useRouter();
@@ -53,15 +57,25 @@ export default function VendorSignupPage() {
       return;
     }
 
+    if (formData.phoneNumber.length !== 10) {
+      setError("Enter a valid 10-digit phone number.");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setError("");
-      const result = await signupVendor(formData);
+      const result = await signupVendor({
+        ...formData,
+        phoneNumber: buildIndianPhoneNumber(formData.phoneNumber),
+      });
       setCreatedVendorId(result.vendorId);
       router.push(
         `/VendorVerifyEmail?vendorId=${encodeURIComponent(
           result.vendorId
-        )}&businessName=${encodeURIComponent(formData.businessName)}`
+        )}&businessName=${encodeURIComponent(
+          formData.businessName
+        )}&email=${encodeURIComponent(formData.email)}`
       );
     } catch (signupError) {
       setError(signupError.message || "Unable to create vendor account right now.");
@@ -172,19 +186,17 @@ export default function VendorSignupPage() {
                 </div>
 
                 <div className="grid gap-5 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-[#4e433e]">
-                      Phone number
-                    </label>
-                    <input
-                      name="phoneNumber"
-                      value={formData.phoneNumber}
-                      onChange={handleChange}
-                      required
-                      placeholder="+91 98765 43210"
-                      className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
-                    />
-                  </div>
+                  <PhoneNumberField
+                    required
+                    name="phoneNumber"
+                    value={formData.phoneNumber}
+                    onChange={(value) =>
+                      setFormData((current) => ({
+                        ...current,
+                        phoneNumber: value,
+                      }))
+                    }
+                  />
 
                   <div>
                     <label className="mb-2 block text-sm font-medium text-[#4e433e]">

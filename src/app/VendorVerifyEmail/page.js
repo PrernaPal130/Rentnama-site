@@ -1,22 +1,54 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, MailCheck, ShieldCheck } from "lucide-react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Building2,
+  MailCheck,
+  ShieldCheck,
+} from "lucide-react";
 import { useAuthData } from "../../context/authContext";
 import {
   refreshCurrentUser,
   resendVendorVerificationEmail,
 } from "../../lib/firebase";
 
-export default function VendorVerifyEmailPage() {
+function VendorVerifyEmailContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { currentUser, profile } = useAuthData();
   const [info, setInfo] = useState("");
   const [error, setError] = useState("");
   const [isChecking, setIsChecking] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const fallbackEmail = profile?.email || searchParams.get("email") || "";
+  const fallbackVendorId = profile?.vendorId || searchParams.get("vendorId") || "";
+  const fallbackBusinessName =
+    profile?.businessName || searchParams.get("businessName") || "";
+  const loginHint =
+    searchParams.get("loginHint") || fallbackVendorId || fallbackEmail || "";
+  const vendorLoginHref = useMemo(() => {
+    const params = new URLSearchParams();
+
+    if (loginHint) {
+      params.set("loginHint", loginHint);
+    }
+    if (fallbackVendorId) {
+      params.set("vendorId", fallbackVendorId);
+    }
+    if (fallbackEmail) {
+      params.set("email", fallbackEmail);
+    }
+    if (fallbackBusinessName) {
+      params.set("businessName", fallbackBusinessName);
+    }
+
+    const queryString = params.toString();
+    return queryString ? `/VendorLogin?${queryString}` : "/VendorLogin";
+  }, [fallbackBusinessName, fallbackEmail, fallbackVendorId, loginHint]);
 
   useEffect(() => {
     if (currentUser?.emailVerified) {
@@ -30,6 +62,9 @@ export default function VendorVerifyEmailPage() {
 
   async function handleRefreshStatus() {
     if (!currentUser) {
+      setError(
+        "Your verification session is no longer active. Log in again to refresh email status."
+      );
       return;
     }
 
@@ -61,6 +96,9 @@ export default function VendorVerifyEmailPage() {
 
   async function handleResendEmail() {
     if (!currentUser) {
+      setError(
+        "Log in again with your vendor account to resend the verification email."
+      );
       return;
     }
 
@@ -118,7 +156,20 @@ export default function VendorVerifyEmailPage() {
                     </p>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-[#625650]">
-                    {profile?.email || "Your registered vendor email address"}
+                    {fallbackEmail || "Your registered vendor email address"}
+                  </p>
+                </div>
+
+                <div className="rounded-[28px] border border-white/75 bg-white/70 p-5 backdrop-blur-sm">
+                  <div className="flex items-center gap-3">
+                    <Building2 className="text-[#b86f5f]" size={20} />
+                    <p className="text-sm font-semibold text-[#2f2622]">
+                      Vendor account
+                    </p>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-[#625650]">
+                    {fallbackBusinessName || "Your RentNama vendor profile"}
+                    {fallbackVendorId ? ` (${fallbackVendorId})` : ""}
                   </p>
                 </div>
 
@@ -171,6 +222,15 @@ export default function VendorVerifyEmailPage() {
                 >
                   {isResending ? "Resending..." : "Resend verification email"}
                 </button>
+
+                {!currentUser ? (
+                  <Link
+                    href={vendorLoginHref}
+                    className="inline-flex w-full items-center justify-center rounded-full border border-[#e4c8c0] bg-[#fff8f4] py-3.5 text-sm font-semibold text-[#9e5949] transition hover:bg-[#fff2eb]"
+                  >
+                    Log in again to continue
+                  </Link>
+                ) : null}
               </div>
 
               {info ? (
@@ -189,5 +249,13 @@ export default function VendorVerifyEmailPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function VendorVerifyEmailPage() {
+  return (
+    <Suspense fallback={null}>
+      <VendorVerifyEmailContent />
+    </Suspense>
   );
 }

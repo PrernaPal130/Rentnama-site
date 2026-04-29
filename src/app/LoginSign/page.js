@@ -5,6 +5,10 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Smartphone, Store, UserRound } from "lucide-react";
 import { useAuthData } from "../../context/authContext";
+import {
+  buildIndianPhoneNumber,
+  PhoneNumberField,
+} from "../../components/PhoneNumberField";
 import { createMfaRecaptcha } from "../../lib/firebase";
 import { getUserProfile } from "../../lib/firebase";
 
@@ -61,10 +65,16 @@ function LoginSignContent() {
       setIsSubmitting(true);
       setError("");
       setInfo("");
+      const fullPhoneNumber = buildIndianPhoneNumber(phoneNumber);
+
+      if (phoneNumber.length !== 10 || !fullPhoneNumber) {
+        throw new Error("Enter a valid 10-digit phone number.");
+      }
+
       const verifier = await buildFreshRecaptcha();
 
       const nextConfirmationResult = await beginCustomerPhoneAuth(
-        phoneNumber,
+        fullPhoneNumber,
         verifier
       );
 
@@ -84,7 +94,7 @@ function LoginSignContent() {
       setIsSubmitting(true);
       setError("");
       const user = await completeCustomerPhoneAuth(confirmationResult, otp, {
-        phoneNumber,
+        phoneNumber: buildIndianPhoneNumber(phoneNumber),
       });
       const profile = await getUserProfile(user.uid);
 
@@ -170,7 +180,7 @@ function LoginSignContent() {
             </h2>
             <p className="mt-3 text-sm leading-7 text-[#625650]">
               {otpStep
-                ? `Enter the OTP sent to ${phoneNumber} to continue.`
+                ? `Enter the OTP sent to ${buildIndianPhoneNumber(phoneNumber)} to continue.`
                 : "Use your phone number to receive a secure one-time code and continue shopping."}
             </p>
 
@@ -181,23 +191,15 @@ function LoginSignContent() {
               className="mt-8 space-y-5"
             >
               {!otpStep ? (
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-[#4e433e]">
-                    Phone number
-                  </label>
-                  <input
-                    type="tel"
-                    placeholder="+91 98765 43210"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    required
-                    className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
-                  />
-                </div>
+                <PhoneNumberField
+                  required
+                  value={phoneNumber}
+                  onChange={setPhoneNumber}
+                />
               ) : (
                 <>
                   <div className="rounded-[28px] border border-[#efd9d0] bg-[#fff8f4] p-4 text-sm leading-6 text-[#765d56]">
-                    OTP sent to <span className="font-semibold">{phoneNumber}</span>.
+                    OTP sent to <span className="font-semibold">{buildIndianPhoneNumber(phoneNumber)}</span>.
                     Enter it to log in to your customer account.
                   </div>
 

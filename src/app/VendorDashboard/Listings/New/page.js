@@ -5,17 +5,25 @@ import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Building2,
   ArrowLeft,
   ArrowRight,
   CalendarDays,
+  Clock3,
+  Home,
   ImagePlus,
   IndianRupee,
+  MapPin,
   PackagePlus,
   Ruler,
   Tag,
 } from "lucide-react";
 import { useAppData } from "../../../../context/myContext";
 import { useAuthData } from "../../../../context/authContext";
+import {
+  buildIndianPhoneNumber,
+  PhoneNumberField,
+} from "../../../../components/PhoneNumberField";
 import { uploadVendorListingImage } from "../../../../lib/firebase";
 
 export default function NewVendorListingPage() {
@@ -30,6 +38,18 @@ export default function NewVendorListingPage() {
     sizes: "",
     availability: "",
     description: "",
+    shopNumber: "",
+    houseNumber: "",
+    landmark: "",
+    street: "",
+    sector: "",
+    city: "",
+    district: "",
+    state: "",
+    pincode: "",
+    storeContact: "",
+    storeHours: "",
+    offlineOrderNote: "",
   });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
@@ -78,6 +98,7 @@ export default function NewVendorListingPage() {
         ...formData,
         id: listingId,
         image: uploadedImage,
+        storeContact: buildIndianPhoneNumber(formData.storeContact),
       });
       router.push("/VendorDashboard/Listings");
     } catch (error) {
@@ -265,6 +286,197 @@ export default function NewVendorListingPage() {
                       required
                       rows={5}
                       placeholder="Describe the outfit, embroidery, fabric, and ideal occasion."
+                      className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2 pt-2">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-[#fff3ee] px-4 py-2 text-sm font-medium text-[#a96051]">
+                      <Building2 size={16} />
+                      Store details
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-gray-600">
+                      Add the exact boutique location so customers can discover
+                      your shop and visit for offline order placement.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                      Shop number
+                    </label>
+                    <div className="relative">
+                      <Building2
+                        size={16}
+                        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#b46c5b]"
+                      />
+                      <input
+                        name="shopNumber"
+                        value={formData.shopNumber}
+                        onChange={handleChange}
+                        placeholder="SCO 12-14"
+                        className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] py-3.5 pl-11 pr-4 outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                      House number
+                    </label>
+                    <div className="relative">
+                      <Home
+                        size={16}
+                        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#b46c5b]"
+                      />
+                      <input
+                        name="houseNumber"
+                        value={formData.houseNumber}
+                        onChange={handleChange}
+                        placeholder="Block A / 21B"
+                        className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] py-3.5 pl-11 pr-4 outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                      Landmark
+                    </label>
+                    <input
+                      name="landmark"
+                      value={formData.landmark}
+                      onChange={handleChange}
+                      placeholder="Near Sector 17 Plaza"
+                      className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                      Street
+                    </label>
+                    <input
+                      name="street"
+                      value={formData.street}
+                      onChange={handleChange}
+                      placeholder="Madhya Marg"
+                      className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                      Sector / Area
+                    </label>
+                    <input
+                      name="sector"
+                      value={formData.sector}
+                      onChange={handleChange}
+                      placeholder="Sector 17C"
+                      className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                      City
+                    </label>
+                    <div className="relative">
+                      <MapPin
+                        size={16}
+                        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#b46c5b]"
+                      />
+                      <input
+                        name="city"
+                        value={formData.city}
+                        onChange={handleChange}
+                        placeholder="Chandigarh"
+                        className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] py-3.5 pl-11 pr-4 outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                      District
+                    </label>
+                    <input
+                      name="district"
+                      value={formData.district}
+                      onChange={handleChange}
+                      placeholder="Chandigarh"
+                      className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                      State
+                    </label>
+                    <input
+                      name="state"
+                      value={formData.state}
+                      onChange={handleChange}
+                      placeholder="Chandigarh"
+                      className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                      Pincode
+                    </label>
+                    <input
+                      name="pincode"
+                      value={formData.pincode}
+                      onChange={handleChange}
+                      placeholder="160017"
+                      className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                    />
+                  </div>
+
+                  <PhoneNumberField
+                    name="storeContact"
+                    label="Store contact"
+                    value={formData.storeContact}
+                    onChange={(value) =>
+                      setFormData((current) => ({
+                        ...current,
+                        storeContact: value,
+                      }))
+                    }
+                  />
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                      Store timings
+                    </label>
+                    <div className="relative">
+                      <Clock3
+                        size={16}
+                        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#b46c5b]"
+                      />
+                      <input
+                        name="storeHours"
+                        value={formData.storeHours}
+                        onChange={handleChange}
+                        placeholder="11:00 AM - 8:00 PM"
+                        className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] py-3.5 pl-11 pr-4 outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                      Offline order note
+                    </label>
+                    <textarea
+                      name="offlineOrderNote"
+                      value={formData.offlineOrderNote}
+                      onChange={handleChange}
+                      rows={4}
+                      placeholder="Tell customers what they can expect if they visit the store offline."
                       className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
                     />
                   </div>

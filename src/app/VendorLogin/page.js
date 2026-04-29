@@ -39,6 +39,11 @@ function VendorLoginContent() {
   const signedUpVendorId = searchParams.get("vendorId");
   const signedUpBusinessName = searchParams.get("businessName");
   const emailVerified = searchParams.get("emailVerified") === "1";
+  const loginHint =
+    searchParams.get("loginHint") ||
+    searchParams.get("vendorId") ||
+    searchParams.get("email") ||
+    "";
   const redirectTo = searchParams.get("redirect") || "/VendorDashboard";
 
   async function buildFreshRecaptcha() {
@@ -58,6 +63,12 @@ function VendorLoginContent() {
     recaptchaRef.current = verifier;
     return verifier;
   }
+
+  useEffect(() => {
+    if (!vendorId && loginHint) {
+      setVendorId(loginHint);
+    }
+  }, [loginHint, vendorId]);
 
   useEffect(() => {
     return () => {
@@ -93,7 +104,22 @@ function VendorLoginContent() {
       }
 
       if (result.status === "needs-email-verification") {
-        router.push("/VendorVerifyEmail");
+        const nextLoginHint =
+          result.profile?.vendorId || result.profile?.email || vendorId;
+        const verifyParams = new URLSearchParams();
+        if (nextLoginHint) {
+          verifyParams.set("loginHint", nextLoginHint);
+        }
+        if (result.profile?.vendorId) {
+          verifyParams.set("vendorId", result.profile.vendorId);
+        }
+        if (result.profile?.businessName) {
+          verifyParams.set("businessName", result.profile.businessName);
+        }
+        if (result.profile?.email) {
+          verifyParams.set("email", result.profile.email);
+        }
+        router.push(`/VendorVerifyEmail?${verifyParams.toString()}`);
         return;
       }
 

@@ -15,6 +15,7 @@ import {
 import { useAuthData } from "./authContext";
 
 const STORAGE_KEY = "rentnama-app-data";
+const GLOBAL_STORAGE_KEY = "rentnama-global-data";
 const LOCAL_STORAGE_SAVE_DELAY = 300;
 const FIRESTORE_SAVE_DELAY = 700;
 
@@ -25,7 +26,104 @@ const emptyCustomerData = {
   orders: [],
 };
 
+function compactJoin(parts) {
+  return parts
+    .map((part) => (typeof part === "string" ? part.trim() : part))
+    .filter(Boolean)
+    .join(", ");
+}
+
+function buildCustomerAddressString(addressInput) {
+  return (
+    addressInput.address ||
+    compactJoin([
+      addressInput.houseNumber,
+      addressInput.street,
+      addressInput.landmark,
+      addressInput.sector,
+      addressInput.city,
+      addressInput.district,
+      addressInput.state,
+      addressInput.pincode,
+    ])
+  );
+}
+
+function normalizeCustomerAddress(addressInput) {
+  return {
+    ...addressInput,
+    houseNumber: addressInput.houseNumber || "",
+    street: addressInput.street || "",
+    landmark: addressInput.landmark || "",
+    sector: addressInput.sector || "",
+    city: addressInput.city || "",
+    district: addressInput.district || "",
+    state: addressInput.state || "",
+    pincode: addressInput.pincode || "",
+    address: buildCustomerAddressString(addressInput),
+  };
+}
+
+function getTrailingMonthLabels(count = 4) {
+  const formatter = new Intl.DateTimeFormat("en-IN", { month: "short" });
+
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date();
+    date.setMonth(date.getMonth() - (count - 1 - index));
+    return formatter.format(date);
+  });
+}
+
+function createMonthlyChart(seed = {}) {
+  const { visitors = 0, orders = 0, revenue = 0, leads = 0 } = seed;
+  const labels = getTrailingMonthLabels();
+
+  return labels.map((label, index) => {
+    const ratio = 0.55 + index * 0.15;
+
+    return {
+      label,
+      visitors: Math.round(visitors * ratio),
+      orders: Math.round(orders * ratio),
+      revenue: Math.round(revenue * ratio),
+      leads: Math.round(leads * ratio),
+    };
+  });
+}
+
+function bumpMonthlyChart(chart = [], delta = {}) {
+  if (!chart.length) {
+    return createMonthlyChart(delta);
+  }
+
+  return chart.map((entry, index) =>
+    index === chart.length - 1
+      ? {
+          ...entry,
+          visitors: (entry.visitors || 0) + (delta.visitors || 0),
+          orders: (entry.orders || 0) + (delta.orders || 0),
+          revenue: (entry.revenue || 0) + (delta.revenue || 0),
+          leads: (entry.leads || 0) + (delta.leads || 0),
+        }
+      : entry
+  );
+}
+
 function mapVendorListingToProduct(listing) {
+  const formattedStoreLocation =
+    listing.storeLocation ||
+    compactJoin([
+      listing.shopNumber,
+      listing.houseNumber,
+      listing.landmark,
+      listing.street,
+      listing.sector,
+      listing.city,
+      listing.district,
+      listing.state,
+      listing.pincode,
+    ]);
+
   return {
     id: listing.id,
     name: listing.name,
@@ -44,11 +142,23 @@ function mapVendorListingToProduct(listing) {
       "Now available to rent on RentNama",
     ],
     shopName: listing.shopName || listing.businessName || "Verified Partner Shop",
-    storeLocation: listing.storeLocation || "Partner boutique location",
+    storeLocation: formattedStoreLocation || "Partner boutique location",
     offlineVisitAvailable: true,
     subscriptionPlan: listing.subscriptionPlan || "Growth",
     onlineCommissionRate: listing.onlineCommissionRate || 18,
     ownerId: listing.ownerId || null,
+    shopNumber: listing.shopNumber || "",
+    houseNumber: listing.houseNumber || "",
+    landmark: listing.landmark || "",
+    street: listing.street || "",
+    sector: listing.sector || "",
+    city: listing.city || "",
+    district: listing.district || "",
+    state: listing.state || "",
+    pincode: listing.pincode || "",
+    storeContact: listing.storeContact || "",
+    storeHours: listing.storeHours || "",
+    offlineOrderNote: listing.offlineOrderNote || "",
     source: "vendor",
   };
 }
@@ -83,6 +193,7 @@ const defaultData = {
       defaultSize: "L",
       rentalDates: "26/05/25 to 31/05/25",
       reviewBullets: ["such a nice piece", "absolutely loved it!"],
+      ownerId: "vendor-ac-001",
       shopName: "Apna Closet Signature Studio",
       storeLocation: "Sector 17, Chandigarh",
       offlineVisitAvailable: true,
@@ -107,6 +218,7 @@ const defaultData = {
       defaultSize: "Free Size",
       rentalDates: "02/04/25 to 05/04/25",
       reviewBullets: ["perfect for wedding functions"],
+      ownerId: "vendor-sg-002",
       shopName: "Saree Galleria Kolkata",
       storeLocation: "Ballygunge, Kolkata",
       offlineVisitAvailable: true,
@@ -131,6 +243,7 @@ const defaultData = {
       defaultSize: "L",
       rentalDates: "14/06/25 to 18/06/25",
       reviewBullets: ["looked premium in person"],
+      ownerId: "vendor-ts-003",
       shopName: "Tasva Occasion House",
       storeLocation: "South Extension, Delhi",
       offlineVisitAvailable: true,
@@ -157,10 +270,22 @@ const defaultData = {
       tags: ["Bridal", "Handwork", "Premium"],
       sizes: ["S", "M", "L", "XL"],
       description: "Elegant bridal lehenga with detailed embroidery and premium finish.",
+      ownerId: "vendor-ac-001",
       shopName: "Apna Closet Chandigarh",
       storeLocation: "Sector 8, Chandigarh",
+      shopNumber: "SCO 12-14",
+      houseNumber: "Block A",
+      landmark: "Near Sector 17 Plaza",
+      street: "Madhya Marg",
+      sector: "Sector 17C",
+      city: "Chandigarh",
+      district: "Chandigarh",
+      state: "Chandigarh",
+      pincode: "160017",
       subscriptionPlan: "Elite",
       onlineCommissionRate: 18,
+      viewCount: 184,
+      monthlyViewCount: 52,
       storeContact: "+91 98765 43210",
       storeHours: "11:00 AM - 8:00 PM",
       offlineOrderNote:
@@ -183,10 +308,22 @@ const defaultData = {
       tags: ["Festive", "Saree", "Designer"],
       sizes: ["Free Size"],
       description: "Festive saree designed for elegant wedding and reception styling.",
+      ownerId: "vendor-sg-002",
       shopName: "Sabyasachi Rental House",
       storeLocation: "Ballygunge, Kolkata",
+      shopNumber: "Shop 8",
+      houseNumber: "12B",
+      landmark: "Opposite Gariahat Market",
+      street: "Ballygunge Circular Road",
+      sector: "",
+      city: "Kolkata",
+      district: "Kolkata",
+      state: "West Bengal",
+      pincode: "700019",
       subscriptionPlan: "Growth",
       onlineCommissionRate: 18,
+      viewCount: 121,
+      monthlyViewCount: 37,
       storeContact: "+91 98300 11223",
       storeHours: "10:30 AM - 7:30 PM",
       offlineOrderNote:
@@ -206,10 +343,22 @@ const defaultData = {
       tags: ["Menswear", "Wedding", "Classic"],
       sizes: ["M", "L", "XL"],
       description: "Classic sherwani set for weddings, engagements, and formal events.",
+      ownerId: "vendor-ts-003",
       shopName: "Tasva Studio Delhi",
       storeLocation: "South Extension, Delhi",
+      shopNumber: "Store 21",
+      houseNumber: "A-14",
+      landmark: "Near South Ex Metro Gate 2",
+      street: "Ring Road",
+      sector: "South Extension II",
+      city: "New Delhi",
+      district: "South Delhi",
+      state: "Delhi",
+      pincode: "110049",
       subscriptionPlan: "Growth",
       onlineCommissionRate: 18,
+      viewCount: 146,
+      monthlyViewCount: 44,
       storeContact: "+91 98110 22446",
       storeHours: "11:00 AM - 9:00 PM",
       offlineOrderNote:
@@ -285,6 +434,92 @@ const defaultData = {
       deposit: "Under review",
     },
   ],
+  adminVendors: [
+    {
+      id: "ADM-VENDOR-001",
+      ownerId: "vendor-ac-001",
+      vendorId: "vendor-apna-201",
+      businessName: "Apna Closet Chandigarh",
+      ownerName: "Prerna Pal",
+      email: "apnacloset@rentnama.in",
+      phoneNumber: "+91 98765 43210",
+      city: "Chandigarh",
+      state: "Chandigarh",
+      approvalStatus: "Approved",
+      accountStatus: "Active",
+      subscriptionPlan: "Elite",
+      subscriptionBillingStatus: "Paid",
+      subscriptionRenewalDate: "15 Apr 2026",
+      joinedOn: "02 Jan 2026",
+      offlineVisitLeads: 7,
+      actualVisitCount: 184,
+      onlineOrderCount: 9,
+      monthlyRevenue: 72000,
+      monthlyCommissionValue: 12960,
+      monthlyChart: createMonthlyChart({
+        visitors: 184,
+        orders: 9,
+        revenue: 72000,
+        leads: 7,
+      }),
+    },
+    {
+      id: "ADM-VENDOR-002",
+      ownerId: "vendor-sg-002",
+      vendorId: "vendor-sabyasachi-114",
+      businessName: "Sabyasachi Rental House",
+      ownerName: "Aarohi Sen",
+      email: "sabyasachi.rentals@rentnama.in",
+      phoneNumber: "+91 98300 11223",
+      city: "Kolkata",
+      state: "West Bengal",
+      approvalStatus: "Pending",
+      accountStatus: "Under Review",
+      subscriptionPlan: "Growth",
+      subscriptionBillingStatus: "Due Soon",
+      subscriptionRenewalDate: "05 Apr 2026",
+      joinedOn: "18 Feb 2026",
+      offlineVisitLeads: 4,
+      actualVisitCount: 121,
+      onlineOrderCount: 5,
+      monthlyRevenue: 42000,
+      monthlyCommissionValue: 7560,
+      monthlyChart: createMonthlyChart({
+        visitors: 121,
+        orders: 5,
+        revenue: 42000,
+        leads: 4,
+      }),
+    },
+    {
+      id: "ADM-VENDOR-003",
+      ownerId: "vendor-ts-003",
+      vendorId: "vendor-tasva-078",
+      businessName: "Tasva Studio Delhi",
+      ownerName: "Raghav Bedi",
+      email: "tasva.studio@rentnama.in",
+      phoneNumber: "+91 98110 22446",
+      city: "New Delhi",
+      state: "Delhi",
+      approvalStatus: "Approved",
+      accountStatus: "Suspended",
+      subscriptionPlan: "Growth",
+      subscriptionBillingStatus: "Past Due",
+      subscriptionRenewalDate: "28 Mar 2026",
+      joinedOn: "11 Dec 2025",
+      offlineVisitLeads: 6,
+      actualVisitCount: 146,
+      onlineOrderCount: 6,
+      monthlyRevenue: 51000,
+      monthlyCommissionValue: 9180,
+      monthlyChart: createMonthlyChart({
+        visitors: 146,
+        orders: 6,
+        revenue: 51000,
+        leads: 6,
+      }),
+    },
+  ],
 };
 
 function makeId(prefix) {
@@ -301,6 +536,16 @@ function formatOrderDate(date = new Date()) {
     month: "short",
     year: "numeric",
   });
+}
+
+function buildGlobalState(current) {
+  return {
+    publicProducts: current.publicProducts,
+    vendorListings: current.vendorListings,
+    vendorBookings: current.vendorBookings,
+    vendorReturns: current.vendorReturns,
+    adminVendors: current.adminVendors,
+  };
 }
 
 function toIsoDate(value) {
@@ -347,11 +592,14 @@ export default function MyState({ children }) {
     async function hydrateStore() {
       try {
         const storedData = window.localStorage.getItem(STORAGE_KEY);
+        const storedGlobalData = window.localStorage.getItem(GLOBAL_STORAGE_KEY);
         const publicProducts = firebaseReady
           ? await loadPublicProductsFromFirestore()
           : [];
+        const globalState = storedGlobalData ? JSON.parse(storedGlobalData) : {};
         const baseState = {
           ...defaultData,
+          ...globalState,
           ...emptyCustomerData,
           publicProducts,
         };
@@ -408,6 +656,28 @@ export default function MyState({ children }) {
   }, [currentUser, data, isHydrated]);
 
   useEffect(() => {
+    if (!isHydrated) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      window.localStorage.setItem(
+        GLOBAL_STORAGE_KEY,
+        JSON.stringify(buildGlobalState(data))
+      );
+    }, LOCAL_STORAGE_SAVE_DELAY);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    data.adminVendors,
+    data.publicProducts,
+    data.vendorBookings,
+    data.vendorListings,
+    data.vendorReturns,
+    isHydrated,
+  ]);
+
+  useEffect(() => {
     if (!isHydrated || !firebaseReady || !currentUser?.uid) {
       return;
     }
@@ -458,9 +728,10 @@ export default function MyState({ children }) {
   );
 
   function addAddress(addressInput) {
+    const normalizedAddress = normalizeCustomerAddress(addressInput);
     const newAddress = {
       id: makeId("ADDR"),
-      ...addressInput,
+      ...normalizedAddress,
     };
 
     setData((current) => {
@@ -476,9 +747,12 @@ export default function MyState({ children }) {
         addresses: [newAddress, ...nextAddresses],
       };
     });
+
+    return newAddress.id;
   }
 
   function updateAddress(addressId, addressInput) {
+    const normalizedAddress = normalizeCustomerAddress(addressInput);
     setData((current) => ({
       ...current,
       addresses: current.addresses.map((address) => {
@@ -490,9 +764,11 @@ export default function MyState({ children }) {
           return address;
         }
 
-        return { ...address, ...addressInput };
+        return { ...address, ...normalizedAddress };
       }),
     }));
+
+    return addressId;
   }
 
   function deleteAddress(addressId) {
@@ -599,6 +875,8 @@ export default function MyState({ children }) {
       const selectedAddress =
         current.addresses.find((address) => address.id === addressId) || null;
 
+      const listingOrderRollup = {};
+      const vendorOrderRollup = {};
       const newOrders = current.cart
         .map((cartItem) => {
           const product = buildPublicCatalogProducts(
@@ -610,6 +888,24 @@ export default function MyState({ children }) {
 
           if (!product) {
             return null;
+          }
+
+           if (product.id && current.vendorListings.some((listing) => listing.id === product.id)) {
+            listingOrderRollup[product.id] = {
+              orders: (listingOrderRollup[product.id]?.orders || 0) + 1,
+              revenue:
+                (listingOrderRollup[product.id]?.revenue || 0) +
+                Number(product.price || 0),
+            };
+          }
+
+          if (product.ownerId) {
+            vendorOrderRollup[product.ownerId] = {
+              orders: (vendorOrderRollup[product.ownerId]?.orders || 0) + 1,
+              revenue:
+                (vendorOrderRollup[product.ownerId]?.revenue || 0) +
+                Number(product.price || 0),
+            };
           }
 
           return {
@@ -634,8 +930,50 @@ export default function MyState({ children }) {
 
       return {
         ...current,
+        adminVendors: current.adminVendors.map((vendor) => {
+          const vendorDelta = vendorOrderRollup[vendor.ownerId];
+
+          if (!vendorDelta) {
+            return vendor;
+          }
+
+          const commissionRate =
+            current.vendorListings.find(
+              (listing) => listing.ownerId === vendor.ownerId
+            )?.onlineCommissionRate || 18;
+          const commissionValue = Math.round(
+            (vendorDelta.revenue * commissionRate) / 100
+          );
+
+          return {
+            ...vendor,
+            onlineOrderCount: (vendor.onlineOrderCount || 0) + vendorDelta.orders,
+            monthlyRevenue: (vendor.monthlyRevenue || 0) + vendorDelta.revenue,
+            monthlyCommissionValue:
+              (vendor.monthlyCommissionValue || 0) + commissionValue,
+            monthlyChart: bumpMonthlyChart(vendor.monthlyChart, {
+              orders: vendorDelta.orders,
+              revenue: vendorDelta.revenue,
+            }),
+          };
+        }),
         orders: [...newOrders, ...current.orders],
         cart: [],
+        vendorListings: current.vendorListings.map((listing) => {
+          const listingDelta = listingOrderRollup[listing.id];
+
+          if (!listingDelta) {
+            return listing;
+          }
+
+          return {
+            ...listing,
+            monthlyOrderCount:
+              (listing.monthlyOrderCount || 0) + listingDelta.orders,
+            monthlyRevenue:
+              (listing.monthlyRevenue || 0) + listingDelta.revenue,
+          };
+        }),
       };
     });
   }
@@ -668,9 +1006,38 @@ export default function MyState({ children }) {
       blockedRanges: [],
       bookedDates: [],
       ownerId: currentUser?.uid || null,
+      viewCount: 0,
+      monthlyViewCount: 0,
+      monthlyOrderCount: 0,
+      monthlyRevenue: 0,
       shopName: profile?.businessName || "Verified Partner Shop",
       businessName: profile?.businessName || "Verified Partner Shop",
-      storeLocation: listingInput.storeLocation || "Store location to be updated",
+      shopNumber: listingInput.shopNumber || "",
+      houseNumber: listingInput.houseNumber || "",
+      landmark: listingInput.landmark || "",
+      street: listingInput.street || "",
+      sector: listingInput.sector || "",
+      city: listingInput.city || "",
+      district: listingInput.district || "",
+      state: listingInput.state || "",
+      pincode: listingInput.pincode || "",
+      storeLocation:
+        [
+          listingInput.shopNumber,
+          listingInput.houseNumber,
+          listingInput.landmark,
+          listingInput.street,
+          listingInput.sector,
+          listingInput.city,
+          listingInput.district,
+          listingInput.state,
+          listingInput.pincode,
+        ]
+          .filter(Boolean)
+          .join(", ") || "Store location to be updated",
+      storeContact: listingInput.storeContact || "",
+      storeHours: listingInput.storeHours || "",
+      offlineOrderNote: listingInput.offlineOrderNote || "",
       subscriptionPlan: "Growth",
       onlineCommissionRate: 18,
     };
@@ -720,6 +1087,33 @@ export default function MyState({ children }) {
           tags: nextTags.length > 0 ? nextTags : listing.tags,
           sizes: sizes.length > 0 ? sizes : listing.sizes,
           description: listingInput.description,
+          shopNumber: listingInput.shopNumber || listing.shopNumber || "",
+          houseNumber: listingInput.houseNumber || listing.houseNumber || "",
+          landmark: listingInput.landmark || listing.landmark || "",
+          street: listingInput.street || listing.street || "",
+          sector: listingInput.sector || listing.sector || "",
+          city: listingInput.city || listing.city || "",
+          district: listingInput.district || listing.district || "",
+          state: listingInput.state || listing.state || "",
+          pincode: listingInput.pincode || listing.pincode || "",
+          storeLocation:
+            [
+              listingInput.shopNumber || listing.shopNumber,
+              listingInput.houseNumber || listing.houseNumber,
+              listingInput.landmark || listing.landmark,
+              listingInput.street || listing.street,
+              listingInput.sector || listing.sector,
+              listingInput.city || listing.city,
+              listingInput.district || listing.district,
+              listingInput.state || listing.state,
+              listingInput.pincode || listing.pincode,
+            ]
+              .filter(Boolean)
+              .join(", ") || listing.storeLocation,
+          storeContact: listingInput.storeContact || listing.storeContact || "",
+          storeHours: listingInput.storeHours || listing.storeHours || "",
+          offlineOrderNote:
+            listingInput.offlineOrderNote || listing.offlineOrderNote || "",
         };
         nextPublicProduct = mapVendorListingToProduct(nextListing);
         return nextListing;
@@ -821,6 +1215,73 @@ export default function MyState({ children }) {
     });
   }
 
+  function trackProductView(productId) {
+    const product = productsById[productId];
+
+    if (!product) {
+      return;
+    }
+
+    setData((current) => ({
+      ...current,
+      adminVendors: current.adminVendors.map((vendor) =>
+        vendor.ownerId === product.ownerId
+          ? {
+              ...vendor,
+              actualVisitCount: (vendor.actualVisitCount || 0) + 1,
+              monthlyChart: bumpMonthlyChart(vendor.monthlyChart, {
+                visitors: 1,
+              }),
+            }
+          : vendor
+      ),
+      vendorListings: current.vendorListings.map((listing) =>
+        listing.id === productId
+          ? {
+              ...listing,
+              viewCount: (listing.viewCount || 0) + 1,
+              monthlyViewCount: (listing.monthlyViewCount || 0) + 1,
+            }
+          : listing
+      ),
+    }));
+  }
+
+  function updateAdminVendorStatus(vendorId, updates) {
+    setData((current) => ({
+      ...current,
+      adminVendors: current.adminVendors.map((vendor) =>
+        vendor.id === vendorId ? { ...vendor, ...updates } : vendor
+      ),
+    }));
+  }
+
+  function approveVendor(vendorId) {
+    updateAdminVendorStatus(vendorId, {
+      approvalStatus: "Approved",
+      accountStatus: "Active",
+    });
+  }
+
+  function rejectVendor(vendorId) {
+    updateAdminVendorStatus(vendorId, {
+      approvalStatus: "Rejected",
+      accountStatus: "Review Closed",
+    });
+  }
+
+  function suspendVendor(vendorId) {
+    updateAdminVendorStatus(vendorId, {
+      accountStatus: "Suspended",
+    });
+  }
+
+  function archiveVendor(vendorId) {
+    updateAdminVendorStatus(vendorId, {
+      accountStatus: "Archived",
+    });
+  }
+
   function archiveVendorListing(listingId) {
     setData((current) => ({
       ...current,
@@ -878,16 +1339,23 @@ export default function MyState({ children }) {
       removeFromWishlist,
       moveWishlistToCart,
       placeOrder,
+      trackProductView,
       addVendorListing,
       updateVendorListing,
       blockVendorListingDates,
       updateVendorBookingStatus,
       archiveVendorListing,
       deleteVendorListing,
+      approveVendor,
+      rejectVendor,
+      suspendVendor,
+      archiveVendor,
       getProductById: (productId) => productsById[productId],
       getOrderById: (orderId) => data.orders.find((order) => order.id === orderId),
       getVendorListingById: (listingId) =>
         vendorListingsWithAvailability.find((listing) => listing.id === listingId),
+      getAdminVendorById: (vendorId) =>
+        data.adminVendors.find((vendor) => vendor.id === vendorId),
     }),
     [
       catalogProducts,

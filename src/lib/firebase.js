@@ -190,6 +190,11 @@ export async function completeCustomerPhoneAuth(
       throw new Error("Use the vendor login for this account.");
     }
 
+    if (existingProfile?.role === "admin") {
+      await signOut(auth);
+      throw new Error("Use the admin account access for this profile.");
+    }
+
     const nextProfile = {
       role: "customer",
       phoneNumber: user.phoneNumber || profileInput.phoneNumber || "",
@@ -222,6 +227,10 @@ export async function updateCustomerProfile(uid, profileInput = {}) {
 
   if (existingProfile?.role === "vendor") {
     throw new Error("Use the vendor profile flow for this account.");
+  }
+
+  if (existingProfile?.role === "admin") {
+    throw new Error("Use the admin profile flow for this account.");
   }
 
   const nextProfile = {
@@ -323,6 +332,33 @@ export async function signInVendor({ loginValue, password }) {
     if (profile?.role !== "vendor") {
       await signOut(auth);
       throw new Error("This is not a vendor account.");
+    }
+
+    return {
+      user: credential.user,
+      profile,
+    };
+  } catch (error) {
+    if (error instanceof Error && !error.message.startsWith("Firebase")) {
+      throw new Error(error.message);
+    }
+
+    throw new Error(friendlyAuthErrorMessage(error));
+  }
+}
+
+export async function signInAdmin({ email, password }) {
+  if (!auth) {
+    throw new Error("Firebase is not configured yet.");
+  }
+
+  try {
+    const credential = await signInWithEmailAndPassword(auth, email, password);
+    const profile = await getUserProfile(credential.user.uid);
+
+    if (profile?.role !== "admin") {
+      await signOut(auth);
+      throw new Error("This is not an admin account.");
     }
 
     return {

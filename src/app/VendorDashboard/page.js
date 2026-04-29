@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   CalendarDays,
   Clock3,
+  LineChart,
   HandCoins,
   LogOut,
   MapPin,
@@ -20,9 +21,16 @@ import { useAuthData } from "../../context/authContext";
 export default function VendorDashboardPage() {
   const router = useRouter();
   const { profile, logout } = useAuthData();
-  const { vendorListings, vendorBookings, vendorReturns } = useAppData();
+  const { vendorListings, vendorBookings, vendorReturns, adminVendors } = useAppData();
   const businessName =
     profile?.businessName || profile?.name || "Studio RentNama";
+  const vendorRecord =
+    adminVendors.find(
+      (vendor) =>
+        vendor.ownerId === profile?.uid ||
+        vendor.businessName === profile?.businessName ||
+        vendor.email === profile?.email
+    ) || null;
 
   const pendingRequests = vendorBookings.filter((booking) =>
     booking.status.toLowerCase().includes("pending")
@@ -31,12 +39,39 @@ export default function VendorDashboardPage() {
   const repeatCustomers = new Set(vendorBookings.map((booking) => booking.customer))
     .size;
   const activeSubscription = vendorListings[0]?.subscriptionPlan || "Growth";
+  const subscriptionBillingStatus =
+    vendorRecord?.subscriptionBillingStatus || "Paid";
   const onlineCommissionRate = vendorListings[0]?.onlineCommissionRate || 18;
   const offlineVisitLeads = vendorBookings.filter((booking) => booking.visitLead).length;
   const monthlyEarnings = vendorBookings
     .filter((booking) => ["Accepted", "Ready", "Picked Up", "Returned"].includes(booking.status))
     .reduce((sum, booking) => sum + Number(booking.amount || 0), 0);
   const monthlyCommission = Math.round((monthlyEarnings * onlineCommissionRate) / 100);
+  const onlineOrders = vendorBookings.filter((booking) =>
+    ["Accepted", "Ready", "Picked Up", "Returned"].includes(booking.status)
+  ).length;
+  const totalListingViews =
+    vendorListings.reduce((sum, listing) => sum + Number(listing.viewCount || 0), 0) ||
+    vendorRecord?.actualVisitCount ||
+    0;
+  const topPerformingListing =
+    vendorListings
+      .map((listing) => {
+        const listingBookings = vendorBookings.filter(
+          (booking) => booking.listingId === listing.id
+        );
+
+        return {
+          id: listing.id,
+          name: listing.name,
+          bookings: listingBookings.length,
+          revenue: listingBookings.reduce(
+            (sum, booking) => sum + Number(booking.amount || 0),
+            0
+          ),
+        };
+      })
+      .sort((first, second) => second.revenue - first.revenue)[0] || null;
 
   const overviewCards = [
     {
@@ -124,6 +159,13 @@ export default function VendorDashboardPage() {
               >
                 <Store size={16} />
                 Show all listed items
+              </Link>
+              <Link
+                href="/VendorDashboard/Analytics"
+                className="inline-flex items-center gap-2 rounded-full border border-[#e4c8c0] bg-white px-5 py-3 text-sm font-medium text-gray-700 transition hover:bg-[#fff6f2]"
+              >
+                <LineChart size={16} />
+                View analytics
               </Link>
               <Link
                 href="/VendorDashboard/Listings/New"
@@ -284,6 +326,19 @@ export default function VendorDashboardPage() {
                   </div>
                   <PackageCheck size={18} className="text-[#b46c5b]" />
                 </Link>
+
+                <Link
+                  href="/VendorDashboard/Analytics"
+                  className="flex w-full items-center justify-between rounded-2xl border border-[#efe0db] bg-[#fffaf8] px-4 py-4 text-left transition hover:bg-[#fff3ee]"
+                >
+                  <div>
+                    <p className="font-medium text-gray-900">Open analytics</p>
+                    <p className="mt-1 text-sm text-gray-600">
+                      Track earnings, online orders, visitor estimates, and listing performance.
+                    </p>
+                  </div>
+                  <LineChart size={18} className="text-[#b46c5b]" />
+                </Link>
               </div>
             </section>
           </div>
@@ -299,14 +354,14 @@ export default function VendorDashboardPage() {
 
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 <div className="rounded-2xl border border-[#efe0db] bg-[#fffaf8] p-4">
-                  <p className="text-sm text-gray-500">Subscription status</p>
-                  <p className="mt-2 text-xl font-semibold text-gray-900">
-                    {activeSubscription} Plan
-                  </p>
-                  <p className="mt-2 text-sm text-gray-600">
-                    Keeps your shop visible on RentNama and unlocks listing access.
-                  </p>
-                </div>
+                    <p className="text-sm text-gray-500">Subscription status</p>
+                    <p className="mt-2 text-xl font-semibold text-gray-900">
+                      {activeSubscription} Plan
+                    </p>
+                    <p className="mt-2 text-sm text-gray-600">
+                      {subscriptionBillingStatus} · keeps your shop visible on RentNama and unlocks listing access.
+                    </p>
+                  </div>
 
                 <div className="rounded-2xl border border-[#efe0db] bg-[#fffaf8] p-4">
                   <p className="text-sm text-gray-500">Online commission rate</p>
@@ -349,9 +404,38 @@ export default function VendorDashboardPage() {
                   </p>
                 </div>
                 <div className="rounded-2xl border border-[#efe0db] bg-white/90 p-4">
+                  <p className="text-sm text-gray-500">Online orders</p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-900">
+                    {onlineOrders}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-[#efe0db] bg-white/90 p-4">
                   <p className="text-sm text-gray-500">Offline visit leads</p>
                   <p className="mt-2 text-2xl font-semibold text-gray-900">
                     {offlineVisitLeads}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl border border-[#efe0db] bg-white/90 p-4">
+                  <p className="text-sm text-gray-500">Estimated listing visitors</p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-900">
+                    {totalListingViews}
+                  </p>
+                  <p className="mt-2 text-sm text-gray-600">
+                    Tracked from real product-page visits on your live listings.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-[#efe0db] bg-white/90 p-4">
+                  <p className="text-sm text-gray-500">Top performing listing</p>
+                  <p className="mt-2 text-base font-semibold text-gray-900">
+                    {topPerformingListing?.name || "No listing performance yet"}
+                  </p>
+                  <p className="mt-2 text-sm text-gray-600">
+                    {topPerformingListing
+                      ? `${topPerformingListing.bookings} bookings • Rs. ${topPerformingListing.revenue.toLocaleString("en-IN")} revenue`
+                      : "Performance insights will show once bookings begin."}
                   </p>
                 </div>
               </div>

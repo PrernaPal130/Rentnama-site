@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   MapPin,
@@ -13,21 +14,63 @@ import {
   X,
 } from "lucide-react";
 import { useAppData } from "../../context/myContext";
+import {
+  buildIndianPhoneNumber,
+  PhoneNumberField,
+} from "../../components/PhoneNumberField";
 
 const emptyForm = {
   label: "Home",
   name: "",
   phone: "",
-  address: "",
+  houseNumber: "",
+  street: "",
+  landmark: "",
+  sector: "",
+  city: "",
+  district: "",
+  state: "",
+  pincode: "",
   note: "",
   defaultAddress: false,
 };
 
+function formatAddress(address) {
+  return (
+    address.address ||
+    [
+      address.houseNumber,
+      address.street,
+      address.landmark,
+      address.sector,
+      address.city,
+      address.district,
+      address.state,
+      address.pincode,
+    ]
+      .filter(Boolean)
+      .join(", ")
+  );
+}
+
 export default function YourAddressPage() {
+  const router = useRouter();
   const { addresses, addAddress, updateAddress, deleteAddress } = useAppData();
+  const [returnTo, setReturnTo] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState(emptyForm);
+  const isCheckoutReturn = returnTo === "/Checkout";
+  const backHref = returnTo || "/Account";
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    setReturnTo(params.get("returnTo") || "");
+  }, []);
 
   function handleChange(event) {
     const { name, value, type, checked } = event.target;
@@ -46,11 +89,18 @@ export default function YourAddressPage() {
 
   function handleSubmit(event) {
     event.preventDefault();
+    const nextFormData = {
+      ...formData,
+      phone: buildIndianPhoneNumber(formData.phone),
+    };
 
-    if (editingId) {
-      updateAddress(editingId, formData);
-    } else {
-      addAddress(formData);
+    const nextAddressId = editingId
+      ? updateAddress(editingId, nextFormData)
+      : addAddress(nextFormData);
+
+    if (returnTo) {
+      router.push(`${returnTo}?selectedAddressId=${nextAddressId}`);
+      return;
     }
 
     closeForm();
@@ -59,12 +109,19 @@ export default function YourAddressPage() {
   function handleEdit(address) {
     setEditingId(address.id);
     setFormData({
-      label: address.label,
-      name: address.name,
-      phone: address.phone,
-      address: address.address,
-      note: address.note,
-      defaultAddress: address.defaultAddress,
+      label: address.label || "Home",
+      name: address.name || "",
+      phone: address.phone || "",
+      houseNumber: address.houseNumber || "",
+      street: address.street || "",
+      landmark: address.landmark || "",
+      sector: address.sector || "",
+      city: address.city || "",
+      district: address.district || "",
+      state: address.state || "",
+      pincode: address.pincode || "",
+      note: address.note || "",
+      defaultAddress: Boolean(address.defaultAddress),
     });
     setShowForm(true);
   }
@@ -73,11 +130,11 @@ export default function YourAddressPage() {
     <main className="min-h-screen bg-[#fffaf7] px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
         <Link
-          href="/Account"
+          href={backHref}
           className="inline-flex items-center gap-2 text-sm font-medium text-[#b46c5b] hover:text-[#9e5949]"
         >
           <ArrowLeft size={16} />
-          Back to your account
+          {isCheckoutReturn ? "Back to checkout" : "Back to your account"}
         </Link>
 
         <section className="mt-5 rounded-[28px] border border-[#ecd8d1] bg-white p-6 shadow-sm sm:p-8">
@@ -87,11 +144,14 @@ export default function YourAddressPage() {
                 Your Address
               </p>
               <h1 className="mt-2 text-3xl font-semibold text-gray-900">
-                Manage saved delivery addresses
+                {isCheckoutReturn
+                  ? "Add a delivery address to continue checkout"
+                  : "Manage saved delivery addresses"}
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-gray-600">
-                View every saved address, choose who receives the outfit, and
-                keep delivery details updated for future rentals.
+                {isCheckoutReturn
+                  ? "Save a full delivery address and we will send you straight back to your order summary."
+                  : "View every saved address, choose who receives the outfit, and keep delivery details updated for future rentals."}
               </p>
             </div>
 
@@ -162,38 +222,118 @@ export default function YourAddressPage() {
                   />
                 </label>
 
+                <PhoneNumberField
+                  required
+                  name="phone"
+                  value={formData.phone}
+                  onChange={(value) =>
+                    setFormData((current) => ({
+                      ...current,
+                      phone: value,
+                    }))
+                  }
+                />
+
                 <label className="text-sm text-gray-700">
-                  <span className="mb-2 block font-medium">Phone Number</span>
+                  <span className="mb-2 block font-medium">House / Flat Number</span>
                   <input
                     required
-                    name="phone"
-                    value={formData.phone}
+                    name="houseNumber"
+                    value={formData.houseNumber}
                     onChange={handleChange}
-                    placeholder="+91 98765 43210"
+                    placeholder="Flat 203, House 18B"
                     className="w-full rounded-2xl border border-[#e5d1cb] px-4 py-3 outline-none focus:border-[#d88b76]"
                   />
                 </label>
 
                 <label className="text-sm text-gray-700">
-                  <span className="mb-2 block font-medium">Address Note</span>
+                  <span className="mb-2 block font-medium">Street / Road</span>
                   <input
-                    name="note"
-                    value={formData.note}
+                    required
+                    name="street"
+                    value={formData.street}
                     onChange={handleChange}
-                    placeholder="Delivery timing or landmark"
+                    placeholder="Street or road name"
+                    className="w-full rounded-2xl border border-[#e5d1cb] px-4 py-3 outline-none focus:border-[#d88b76]"
+                  />
+                </label>
+
+                <label className="text-sm text-gray-700">
+                  <span className="mb-2 block font-medium">Landmark</span>
+                  <input
+                    name="landmark"
+                    value={formData.landmark}
+                    onChange={handleChange}
+                    placeholder="Near metro gate / mall / chowk"
+                    className="w-full rounded-2xl border border-[#e5d1cb] px-4 py-3 outline-none focus:border-[#d88b76]"
+                  />
+                </label>
+
+                <label className="text-sm text-gray-700">
+                  <span className="mb-2 block font-medium">Sector / Area</span>
+                  <input
+                    name="sector"
+                    value={formData.sector}
+                    onChange={handleChange}
+                    placeholder="Sector, colony, or locality"
+                    className="w-full rounded-2xl border border-[#e5d1cb] px-4 py-3 outline-none focus:border-[#d88b76]"
+                  />
+                </label>
+
+                <label className="text-sm text-gray-700">
+                  <span className="mb-2 block font-medium">City</span>
+                  <input
+                    required
+                    name="city"
+                    value={formData.city}
+                    onChange={handleChange}
+                    placeholder="City"
+                    className="w-full rounded-2xl border border-[#e5d1cb] px-4 py-3 outline-none focus:border-[#d88b76]"
+                  />
+                </label>
+
+                <label className="text-sm text-gray-700">
+                  <span className="mb-2 block font-medium">District</span>
+                  <input
+                    name="district"
+                    value={formData.district}
+                    onChange={handleChange}
+                    placeholder="District"
+                    className="w-full rounded-2xl border border-[#e5d1cb] px-4 py-3 outline-none focus:border-[#d88b76]"
+                  />
+                </label>
+
+                <label className="text-sm text-gray-700">
+                  <span className="mb-2 block font-medium">State</span>
+                  <input
+                    required
+                    name="state"
+                    value={formData.state}
+                    onChange={handleChange}
+                    placeholder="State"
+                    className="w-full rounded-2xl border border-[#e5d1cb] px-4 py-3 outline-none focus:border-[#d88b76]"
+                  />
+                </label>
+
+                <label className="text-sm text-gray-700">
+                  <span className="mb-2 block font-medium">Pincode</span>
+                  <input
+                    required
+                    name="pincode"
+                    value={formData.pincode}
+                    onChange={handleChange}
+                    placeholder="160017"
                     className="w-full rounded-2xl border border-[#e5d1cb] px-4 py-3 outline-none focus:border-[#d88b76]"
                   />
                 </label>
 
                 <label className="text-sm text-gray-700 md:col-span-2">
-                  <span className="mb-2 block font-medium">Full Address</span>
-                  <textarea
-                    required
-                    name="address"
-                    value={formData.address}
+                  <span className="mb-2 block font-medium">Address Note</span>
+                  <input
+                    name="note"
+                    value={formData.note}
                     onChange={handleChange}
-                    placeholder="House number, area, city, state, PIN"
-                    rows={4}
+                    placeholder="Delivery timing, floor, or any special instruction"
                     className="w-full rounded-2xl border border-[#e5d1cb] px-4 py-3 outline-none focus:border-[#d88b76]"
                   />
                 </label>
@@ -214,7 +354,11 @@ export default function YourAddressPage() {
                     type="submit"
                     className="rounded-full bg-[#c97762] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#b96954]"
                   >
-                    {editingId ? "Update Address" : "Save Address"}
+                    {isCheckoutReturn && !editingId
+                      ? "Save and return to checkout"
+                      : editingId
+                      ? "Update Address"
+                      : "Save Address"}
                   </button>
                   <button
                     type="button"
@@ -273,7 +417,7 @@ export default function YourAddressPage() {
                   </div>
                   <div className="flex items-start gap-2">
                     <MapPin size={16} className="mt-0.5 text-[#b46c5b]" />
-                    <span>{address.address}</span>
+                    <span>{formatAddress(address)}</span>
                   </div>
                 </div>
 

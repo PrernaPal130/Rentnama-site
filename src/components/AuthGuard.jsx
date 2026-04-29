@@ -70,6 +70,11 @@ export function CustomerGuard({ children }) {
       return;
     }
 
+    if (profile?.role === "admin") {
+      router.replace("/MasterDashboard");
+      return;
+    }
+
     if (needsCustomerProfile && !isCustomerSetupRoute) {
       router.replace("/CustomerSetupProfile");
     }
@@ -90,6 +95,7 @@ export function CustomerGuard({ children }) {
   if (
     !currentUser ||
     profile?.role === "vendor" ||
+    profile?.role === "admin" ||
     (needsCustomerProfile && !isCustomerSetupRoute)
   ) {
     return (
@@ -126,7 +132,7 @@ export function VendorGuard({ children }) {
     }
 
     if (profile?.role && profile.role !== "vendor") {
-      router.replace("/");
+      router.replace(profile.role === "admin" ? "/MasterDashboard" : "/");
       return;
     }
 
@@ -165,6 +171,52 @@ export function VendorGuard({ children }) {
         title="Vendor access required"
         href="/VendorLogin"
         linkLabel="Go to vendor login"
+      />
+    );
+  }
+
+  return children;
+}
+
+export function AdminGuard({ children }) {
+  const { currentUser, profile, authLoading } = useAuthData();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
+    if (!currentUser) {
+      router.replace("/company-access");
+      return;
+    }
+
+    if (profile?.role === "vendor") {
+      router.replace("/VendorDashboard");
+      return;
+    }
+
+    if (profile?.role === "customer") {
+      router.replace("/");
+      return;
+    }
+
+    if (profile?.role !== "admin") {
+      router.replace("/");
+    }
+  }, [authLoading, currentUser, profile, router]);
+
+  if (authLoading) {
+    return <GuardLoading title="Loading your admin workspace" />;
+  }
+
+  if (!currentUser || profile?.role !== "admin") {
+    return (
+      <GuardFallback
+        title="Admin access required"
+        href="/company-access"
+        linkLabel="Go to admin access"
       />
     );
   }

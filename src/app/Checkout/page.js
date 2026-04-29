@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -28,6 +28,7 @@ export default function CheckoutPage() {
   } =
     useAppData();
   const router = useRouter();
+  const [selectedAddressParam, setSelectedAddressParam] = useState("");
 
   const cartItems = cart
     .map((item) => {
@@ -49,6 +50,29 @@ export default function CheckoutPage() {
   const selectedAddress = addresses.find(
     (address) => address.id === selectedAddressId
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    setSelectedAddressParam(params.get("selectedAddressId") || "");
+  }, []);
+
+  useEffect(() => {
+    if (!selectedAddressParam) {
+      return;
+    }
+
+    const matchedAddress = addresses.find(
+      (address) => address.id === selectedAddressParam
+    );
+
+    if (matchedAddress) {
+      setSelectedAddressId(matchedAddress.id);
+    }
+  }, [addresses, selectedAddressParam]);
 
   const subtotal = cartItems.reduce(
     (sum, item) => sum + item.product.price * (item.quantity || 1),
@@ -139,7 +163,7 @@ export default function CheckoutPage() {
                         No saved address found. Add one before placing an order.
                       </p>
                       <Link
-                        href="/YourAddress"
+                        href="/YourAddress?returnTo=/Checkout"
                         className="mt-3 inline-block text-sm font-medium text-[#b46c5b] hover:underline"
                       >
                         Add address
@@ -199,7 +223,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <Link
-                  href="/YourAddress"
+                  href="/YourAddress?returnTo=/Checkout"
                   className="mt-4 inline-block text-sm font-medium text-[#b46c5b] hover:underline"
                 >
                   Manage addresses

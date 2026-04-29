@@ -10,8 +10,12 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
+  Clock3,
+  MapPin,
+  Phone,
   Ruler,
   ShieldCheck,
+  Store,
   Tag,
 } from "lucide-react";
 import { useAppData } from "../../../../context/myContext";
@@ -89,6 +93,19 @@ export default function VendorListingPreviewPage() {
     month: initialCalendarDate.getMonth(),
     year: initialCalendarDate.getFullYear(),
   });
+  const fullAddress = [
+    listing?.shopNumber,
+    listing?.houseNumber,
+    listing?.landmark,
+    listing?.street,
+    listing?.sector,
+    listing?.city,
+    listing?.district,
+    listing?.state,
+    listing?.pincode,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   const bufferedDates = useMemo(
     () => (listing ? getBufferedDates(listing.bookedDates) : new Set()),
@@ -220,6 +237,66 @@ export default function VendorListingPreviewPage() {
                       {tag}
                     </span>
                   ))}
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-3xl border border-[#efe0db] bg-white p-5">
+                <div className="flex items-center gap-2 text-[#b46c5b]">
+                  <Store size={18} />
+                  <p className="text-sm font-semibold text-gray-900">Store details</p>
+                </div>
+
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-[#efe0db] bg-[#fffaf8] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#bc7766]">
+                      Shop name
+                    </p>
+                    <p className="mt-2 text-sm font-medium text-gray-900">
+                      {listing.shopName || "Verified Partner Shop"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-[#efe0db] bg-[#fffaf8] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#bc7766]">
+                      Contact
+                    </p>
+                    <div className="mt-2 flex items-center gap-2 text-sm font-medium text-gray-900">
+                      <Phone size={14} className="text-[#b46c5b]" />
+                      <span>{listing.storeContact || "Contact not added yet"}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-[#efe0db] bg-[#fffaf8] p-4">
+                  <div className="flex items-center gap-2 text-[#b46c5b]">
+                    <MapPin size={16} />
+                    <p className="text-sm font-semibold text-gray-900">Full store address</p>
+                  </div>
+                  <p className="mt-2 text-sm leading-7 text-gray-700">
+                    {fullAddress || listing.storeLocation || "Store address not added yet"}
+                  </p>
+                </div>
+
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-[#efe0db] bg-[#fffaf8] p-4">
+                    <div className="flex items-center gap-2 text-[#b46c5b]">
+                      <Clock3 size={16} />
+                      <p className="text-sm font-semibold text-gray-900">Store timings</p>
+                    </div>
+                    <p className="mt-2 text-sm leading-7 text-gray-700">
+                      {listing.storeHours || "Store timings not added yet"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-[#efe0db] bg-[#fffaf8] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#bc7766]">
+                      Offline order note
+                    </p>
+                    <p className="mt-2 text-sm leading-7 text-gray-700">
+                      {listing.offlineOrderNote ||
+                        "Offline store note not added yet for this listing."}
+                    </p>
+                  </div>
                 </div>
               </div>
 

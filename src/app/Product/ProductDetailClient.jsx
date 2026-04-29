@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -21,7 +21,14 @@ import { useAuthData } from "../../context/authContext";
 import { CustomerTopNav } from "../../components/CustomerAreaLayout";
 
 export default function ProductDetailClient({ productId }) {
-  const { getProductById, addToCart, addToWishlist } = useAppData();
+  const {
+    cart,
+    getProductById,
+    addToCart,
+    addToWishlist,
+    removeFromCart,
+    trackProductView,
+  } = useAppData();
   const { currentUser, profile } = useAuthData();
   const product = getProductById(productId);
   const showCustomerTopNav = !currentUser || profile?.role !== "vendor";
@@ -32,7 +39,8 @@ export default function ProductDetailClient({ productId }) {
   const [selectedImage, setSelectedImage] = useState(product?.image || "/lengha.jpg");
   const [rentalStartDate, setRentalStartDate] = useState("2026-03-28");
   const [rentalEndDate, setRentalEndDate] = useState("2026-04-02");
-  const [cartFeedback, setCartFeedback] = useState(false);
+  const [cartFeedback, setCartFeedback] = useState("");
+  const cartFeedbackTimeoutRef = useRef(null);
   const storeName = product?.shopName || "Apna Closet Signature Studio";
   const storeLocation = product?.storeLocation || "SCO 12-14, Sector 17C, Chandigarh";
   const storeContact = product?.storeContact || "+91 98765 43210";
@@ -40,6 +48,35 @@ export default function ProductDetailClient({ productId }) {
   const offlineOrderNote =
     product?.offlineOrderNote ||
     "Visit the store for fabric inspection, styling help, fittings, and offline order placement.";
+  const storeAddress = [
+    product?.shopNumber,
+    product?.houseNumber,
+    product?.landmark,
+    product?.street,
+    product?.sector,
+    product?.city,
+    product?.district,
+    product?.state,
+    product?.pincode,
+  ]
+    .filter(Boolean)
+    .join(", ") || storeLocation;
+
+  useEffect(() => {
+    if (!product?.id) {
+      return;
+    }
+
+    trackProductView(product.id);
+  }, [product?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (cartFeedbackTimeoutRef.current) {
+        window.clearTimeout(cartFeedbackTimeoutRef.current);
+      }
+    };
+  }, []);
 
   if (!product) {
     return (
@@ -70,16 +107,33 @@ export default function ProductDetailClient({ productId }) {
     rentalStartDate && rentalEndDate
       ? `${rentalStartDate} to ${rentalEndDate}`
       : product.rentalDates;
+  const cartItemsForProduct = cart.filter((item) => item.productId === product.id);
+  const isInCart = cartItemsForProduct.length > 0;
 
-  function handleAddToCart() {
+  function showCartMessage(status) {
+    setCartFeedback(status);
+
+    if (cartFeedbackTimeoutRef.current) {
+      window.clearTimeout(cartFeedbackTimeoutRef.current);
+    }
+
+    cartFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setCartFeedback("");
+    }, 1600);
+  }
+
+  function handleCartAction() {
+    if (isInCart) {
+      cartItemsForProduct.forEach((item) => removeFromCart(item.id));
+      showCartMessage("removed");
+      return;
+    }
+
     addToCart(product.id, {
       size: selectedSize,
       rentalDates: selectedRentalDates,
     });
-    setCartFeedback(true);
-    window.setTimeout(() => {
-      setCartFeedback(false);
-    }, 1600);
+    showCartMessage("added");
   }
 
   function scrollToStoreDetails() {
@@ -308,14 +362,24 @@ export default function ProductDetailClient({ productId }) {
                     </button>
                     <button
                       type="button"
-                      onClick={handleAddToCart}
+                      onClick={handleCartAction}
                       className={`rounded-full px-6 py-3 text-sm font-medium transition ${
-                        cartFeedback
+                        cartFeedback === "added"
                           ? "border border-[#c97762] bg-[#c97762] text-white"
+                          : cartFeedback === "removed"
+                          ? "border border-[#b85c50] bg-[#fff1ee] text-[#b85c50]"
+                          : isInCart
+                          ? "border border-[#b85c50] bg-[#fff4f1] text-[#b85c50] hover:bg-[#ffe9e4]"
                           : "border border-[#e4c8c0] bg-white text-gray-700 hover:bg-[#fff6f2]"
                       }`}
                     >
-                      {cartFeedback ? "Added" : "Add to Cart"}
+                      {cartFeedback === "added"
+                        ? "Added"
+                        : cartFeedback === "removed"
+                        ? "Removed"
+                        : isInCart
+                        ? "Remove from Cart"
+                        : "Add to Cart"}
                     </button>
                     <button
                       type="button"
@@ -458,10 +522,10 @@ export default function ProductDetailClient({ productId }) {
                 <div className="rounded-2xl border border-[#efe0db] bg-white p-5">
                   <div className="flex items-center gap-2 text-[#b46c5b]">
                     <MapPin size={16} />
-                    <p className="text-sm font-semibold text-gray-900">Location</p>
+                    <p className="text-sm font-semibold text-gray-900">Full address</p>
                   </div>
                   <p className="mt-3 text-base font-medium text-gray-900">
-                    {storeLocation}
+                    {storeAddress}
                   </p>
                   <p className="mt-2 text-sm text-gray-600">
                     Available for both online rentals and offline store visits.
