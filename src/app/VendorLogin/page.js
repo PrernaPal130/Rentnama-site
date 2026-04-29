@@ -358,7 +358,7 @@ function VendorLoginContent() {
 
               {emailVerified ? (
                 <p className="mt-4 rounded-2xl border border-[#d9e7d8] bg-[#f5fbf4] px-4 py-3 text-sm text-[#4e7a46]">
-                  Your vendor email is verified. Log in once more to finish OTP setup securely.
+                  Your vendor email is verified. Continue to OTP setup securely.
                 </p>
               ) : null}
 

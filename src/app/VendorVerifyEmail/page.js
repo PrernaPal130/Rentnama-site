@@ -28,6 +28,7 @@ function VendorVerifyEmailContent() {
   const fallbackVendorId = profile?.vendorId || searchParams.get("vendorId") || "";
   const fallbackBusinessName =
     profile?.businessName || searchParams.get("businessName") || "";
+  const sessionMissing = !currentUser;
   const loginHint =
     searchParams.get("loginHint") || fallbackVendorId || fallbackEmail || "";
   const vendorLoginHref = useMemo(() => {
@@ -52,11 +53,7 @@ function VendorVerifyEmailContent() {
 
   useEffect(() => {
     if (currentUser?.emailVerified) {
-      router.replace(
-        `/VendorLogin?emailVerified=1${
-          profile?.vendorId ? `&vendorId=${encodeURIComponent(profile.vendorId)}` : ""
-        }`
-      );
+      router.replace("/VendorSetupMfa");
     }
   }, [currentUser, profile, router]);
 
@@ -74,11 +71,7 @@ function VendorVerifyEmailContent() {
       const refreshedUser = await refreshCurrentUser(currentUser);
 
       if (refreshedUser?.emailVerified) {
-        router.push(
-          `/VendorLogin?emailVerified=1${
-            profile?.vendorId ? `&vendorId=${encodeURIComponent(profile.vendorId)}` : ""
-          }`
-        );
+        router.push("/VendorSetupMfa");
         return;
       }
 
@@ -197,33 +190,47 @@ function VendorVerifyEmailContent() {
               </div>
 
               <h2 className="mt-4 text-3xl font-semibold text-[#2f2622]">
-                Check your inbox
+                {sessionMissing ? "Log in again to continue" : "Check your inbox"}
               </h2>
               <p className="mt-3 text-sm leading-7 text-[#625650]">
-                Once you click the verification link from your email, come back here and log in again so we can finish OTP setup with a fresh secure session.
+                {sessionMissing
+                  ? "Your vendor session is no longer active. Log in again so Firebase knows which vendor account should continue email verification and OTP setup."
+                  : "Once you click the verification link from your email, come back here and continue straight to OTP setup. If Firebase asks for a fresh secure session there, we will confirm the password on that page itself instead of sending you back through login again."}
               </p>
 
               <div className="mt-8 space-y-4">
-                <button
-                  type="button"
-                  onClick={handleRefreshStatus}
-                  disabled={isChecking}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#c97762] py-3.5 text-sm font-semibold text-white transition hover:bg-[#b96954]"
-                >
-                  {isChecking ? "Checking..." : "I have verified my email"}
-                  <ArrowRight size={16} />
-                </button>
+                {sessionMissing ? (
+                  <Link
+                    href={vendorLoginHref}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#c97762] py-3.5 text-sm font-semibold text-white transition hover:bg-[#b96954]"
+                  >
+                    Log in again to continue
+                    <ArrowRight size={16} />
+                  </Link>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleRefreshStatus}
+                      disabled={isChecking}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#c97762] py-3.5 text-sm font-semibold text-white transition hover:bg-[#b96954]"
+                    >
+                      {isChecking ? "Checking..." : "I have verified my email"}
+                      <ArrowRight size={16} />
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={handleResendEmail}
-                  disabled={isResending}
-                  className="inline-flex w-full items-center justify-center rounded-full border border-[#e4c8c0] bg-white py-3.5 text-sm font-semibold text-gray-700 transition hover:bg-[#fff6f2]"
-                >
-                  {isResending ? "Resending..." : "Resend verification email"}
-                </button>
+                    <button
+                      type="button"
+                      onClick={handleResendEmail}
+                      disabled={isResending}
+                      className="inline-flex w-full items-center justify-center rounded-full border border-[#e4c8c0] bg-white py-3.5 text-sm font-semibold text-gray-700 transition hover:bg-[#fff6f2]"
+                    >
+                      {isResending ? "Resending..." : "Resend verification email"}
+                    </button>
+                  </>
+                )}
 
-                {!currentUser ? (
+                {sessionMissing ? (
                   <Link
                     href={vendorLoginHref}
                     className="inline-flex w-full items-center justify-center rounded-full border border-[#e4c8c0] bg-[#fff8f4] py-3.5 text-sm font-semibold text-[#9e5949] transition hover:bg-[#fff2eb]"
