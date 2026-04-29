@@ -8,6 +8,7 @@ import {
   loadCustomerDataFromFirestore,
   loadPublicProductsFromFirestore,
   loadVendorDataFromFirestore,
+  saveProtectedShopDetails,
   savePublicProductToFirestore,
   saveCustomerDataToFirestore,
   saveVendorDataToFirestore,
@@ -24,6 +25,8 @@ const emptyCustomerData = {
   wishlist: [],
   addresses: [],
   orders: [],
+  viewedStoreShops: [],
+  storeAccessPassActive: false,
 };
 
 function compactJoin(parts) {
@@ -130,6 +133,7 @@ function mapVendorListingToProduct(listing) {
     subtitle: `${listing.category} rental`,
     description: listing.description,
     image: listing.image || "/lengha.jpg",
+    clipUrl: listing.clipUrl || "",
     gallery: [listing.image || "/lengha.jpg"],
     price: Number(listing.price) || 0,
     originalPrice: Math.round((Number(listing.price) || 0) * 2.1),
@@ -142,23 +146,15 @@ function mapVendorListingToProduct(listing) {
       "Now available to rent on RentNama",
     ],
     shopName: listing.shopName || listing.businessName || "Verified Partner Shop",
-    storeLocation: formattedStoreLocation || "Partner boutique location",
+    storeLocation:
+      compactJoin([listing.city, listing.state]) ||
+      formattedStoreLocation ||
+      "Partner boutique location",
     offlineVisitAvailable: true,
     subscriptionPlan: listing.subscriptionPlan || "Growth",
     onlineCommissionRate: listing.onlineCommissionRate || 18,
     ownerId: listing.ownerId || null,
-    shopNumber: listing.shopNumber || "",
-    houseNumber: listing.houseNumber || "",
-    landmark: listing.landmark || "",
-    street: listing.street || "",
-    sector: listing.sector || "",
-    city: listing.city || "",
-    district: listing.district || "",
-    state: listing.state || "",
-    pincode: listing.pincode || "",
-    storeContact: listing.storeContact || "",
-    storeHours: listing.storeHours || "",
-    offlineOrderNote: listing.offlineOrderNote || "",
+    shopAccessKey: listing.ownerId || listing.id,
     source: "vendor",
   };
 }
@@ -586,6 +582,7 @@ function deriveBookedDatesForListing(bookings, listingId) {
 export default function MyState({ children }) {
   const { currentUser, profile, authLoading } = useAuthData();
   const [data, setData] = useState(defaultData);
+  const [directCheckoutItem, setDirectCheckoutItem] = useState(null);
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
@@ -688,6 +685,8 @@ export default function MyState({ children }) {
         wishlist: data.wishlist,
         addresses: data.addresses,
         orders: data.orders,
+        viewedStoreShops: data.viewedStoreShops,
+        storeAccessPassActive: data.storeAccessPassActive,
       });
 
       if (profile?.role === "vendor") {
@@ -705,9 +704,11 @@ export default function MyState({ children }) {
     data.addresses,
     data.cart,
     data.orders,
+    data.storeAccessPassActive,
     data.vendorBookings,
     data.vendorListings,
     data.vendorReturns,
+    data.viewedStoreShops,
     data.wishlist,
     isHydrated,
     profile,
@@ -816,6 +817,71 @@ export default function MyState({ children }) {
     }));
   }
 
+  function requestStoreAccess(shopKey) {
+    if (!shopKey) {
+      return { allowed: false, reason: "missing-shop" };
+    }
+
+    const alreadyViewed = data.viewedStoreShops.includes(shopKey);
+
+    if (data.storeAccessPassActive || alreadyViewed) {
+      return {
+        allowed: true,
+        remainingFreeViews: Math.max(0, 5 - data.viewedStoreShops.length),
+      };
+    }
+
+    if (data.viewedStoreShops.length >= 5) {
+      return { allowed: false, reason: "limit-reached" };
+    }
+
+    setData((current) => ({
+      ...current,
+      viewedStoreShops: [...current.viewedStoreShops, shopKey],
+    }));
+
+    return {
+      allowed: true,
+      remainingFreeViews: Math.max(0, 4 - data.viewedStoreShops.length),
+    };
+  }
+
+  function unlockStoreAccessPass() {
+    setData((current) => ({
+      ...current,
+      storeAccessPassActive: true,
+    }));
+  }
+
+  function startDirectCheckout(productId, options = {}) {
+    const product = productsById[productId];
+
+    if (!product) {
+      return null;
+    }
+
+    const directItem = {
+      id: makeId("DIRECT"),
+      productId,
+      size: options.size || product.defaultSize,
+      rentalDates: options.rentalDates || product.rentalDates,
+      quantity: 1,
+    };
+
+    setDirectCheckoutItem(directItem);
+    return directItem;
+  }
+
+  function updateDirectCheckoutItem(updates) {
+    setDirectCheckoutItem((current) =>
+      current ? { ...current, ...updates } : current
+    );
+  }
+
+  function clearDirectCheckout() {
+    setDirectCheckoutItem(null);
+  }
+
   function removeFromCart(cartItemId) {
     setData((current) => ({
       ...current,
@@ -866,9 +932,18 @@ export default function MyState({ children }) {
     removeFromWishlist(wishlistItemId);
   }
 
-  function placeOrder({ addressId, paymentMethod, totals }) {
+  function placeOrder({
+    addressId,
+    paymentMethod,
+    totals,
+    orderItems = null,
+    clearCart = true,
+  }) {
     setData((current) => {
-      if (!addressId || current.cart.length === 0) {
+      const checkoutItems =
+        orderItems && orderItems.length > 0 ? orderItems : current.cart;
+
+      if (!addressId || checkoutItems.length === 0) {
         return current;
       }
 
@@ -877,7 +952,7 @@ export default function MyState({ children }) {
 
       const listingOrderRollup = {};
       const vendorOrderRollup = {};
-      const newOrders = current.cart
+      const newOrders = checkoutItems
         .map((cartItem) => {
           const product = buildPublicCatalogProducts(
             current.products,
@@ -958,7 +1033,7 @@ export default function MyState({ children }) {
           };
         }),
         orders: [...newOrders, ...current.orders],
-        cart: [],
+        cart: clearCart ? [] : current.cart,
         vendorListings: current.vendorListings.map((listing) => {
           const listingDelta = listingOrderRollup[listing.id];
 
@@ -995,6 +1070,7 @@ export default function MyState({ children }) {
       name: listingInput.productName,
       category: listingInput.category,
       image: listingInput.image || "/lengha.jpg",
+      clipUrl: listingInput.clipUrl || "",
       price: parsedPrice,
       securityDeposit: parsedDeposit,
       availability:
@@ -1052,6 +1128,22 @@ export default function MyState({ children }) {
       vendorListings: [newListing, ...current.vendorListings],
     }));
     savePublicProductToFirestore(publicProduct);
+    saveProtectedShopDetails(newListing.ownerId || newListing.id, {
+      shopName: newListing.shopName || newListing.businessName || "Verified Partner Shop",
+      storeLocation: newListing.storeLocation || "",
+      shopNumber: newListing.shopNumber || "",
+      houseNumber: newListing.houseNumber || "",
+      landmark: newListing.landmark || "",
+      street: newListing.street || "",
+      sector: newListing.sector || "",
+      city: newListing.city || "",
+      district: newListing.district || "",
+      state: newListing.state || "",
+      pincode: newListing.pincode || "",
+      storeContact: newListing.storeContact || "",
+      storeHours: newListing.storeHours || "",
+      offlineOrderNote: newListing.offlineOrderNote || "",
+    });
   }
 
   function updateVendorListing(listingId, listingInput) {
@@ -1080,6 +1172,7 @@ export default function MyState({ children }) {
           name: listingInput.productName,
           category: listingInput.category,
           image: listingInput.image || listing.image,
+          clipUrl: listingInput.clipUrl || listing.clipUrl || "",
           price: parsedPrice,
           securityDeposit: parsedDeposit,
           availability:
@@ -1127,6 +1220,39 @@ export default function MyState({ children }) {
 
     if (nextPublicProduct) {
       savePublicProductToFirestore(nextPublicProduct);
+      saveProtectedShopDetails(nextPublicProduct.ownerId || listingId, {
+        shopName:
+          listingInput.shopName ||
+          profile?.businessName ||
+          nextPublicProduct.shopName ||
+          "Verified Partner Shop",
+        storeLocation:
+          [
+            listingInput.shopNumber,
+            listingInput.houseNumber,
+            listingInput.landmark,
+            listingInput.street,
+            listingInput.sector,
+            listingInput.city,
+            listingInput.district,
+            listingInput.state,
+            listingInput.pincode,
+          ]
+            .filter(Boolean)
+            .join(", ") || "",
+        shopNumber: listingInput.shopNumber || "",
+        houseNumber: listingInput.houseNumber || "",
+        landmark: listingInput.landmark || "",
+        street: listingInput.street || "",
+        sector: listingInput.sector || "",
+        city: listingInput.city || "",
+        district: listingInput.district || "",
+        state: listingInput.state || "",
+        pincode: listingInput.pincode || "",
+        storeContact: listingInput.storeContact || "",
+        storeHours: listingInput.storeHours || "",
+        offlineOrderNote: listingInput.offlineOrderNote || "",
+      });
     }
   }
 
@@ -1335,6 +1461,12 @@ export default function MyState({ children }) {
       addToCart,
       removeFromCart,
       updateCartItem,
+      requestStoreAccess,
+      unlockStoreAccessPass,
+      directCheckoutItem,
+      startDirectCheckout,
+      updateDirectCheckoutItem,
+      clearDirectCheckout,
       addToWishlist,
       removeFromWishlist,
       moveWishlistToCart,

@@ -25,12 +25,18 @@ export default function CheckoutPage() {
     placeOrder,
     removeFromCart,
     updateCartItem,
+    directCheckoutItem,
+    updateDirectCheckoutItem,
+    clearDirectCheckout,
   } =
     useAppData();
   const router = useRouter();
+  const [checkoutMode, setCheckoutMode] = useState("");
   const [selectedAddressParam, setSelectedAddressParam] = useState("");
 
-  const cartItems = cart
+  const isDirectCheckout = checkoutMode === "direct" && Boolean(directCheckoutItem);
+  const checkoutSourceItems = isDirectCheckout ? [directCheckoutItem] : cart;
+  const cartItems = checkoutSourceItems
     .map((item) => {
       const product = getProductById(item.productId);
 
@@ -57,6 +63,7 @@ export default function CheckoutPage() {
     }
 
     const params = new URLSearchParams(window.location.search);
+    setCheckoutMode(params.get("mode") || "");
     setSelectedAddressParam(params.get("selectedAddressId") || "");
   }, []);
 
@@ -101,7 +108,13 @@ export default function CheckoutPage() {
         discount,
         total,
       },
+      orderItems: isDirectCheckout ? cartItems : null,
+      clearCart: !isDirectCheckout,
     });
+
+    if (isDirectCheckout) {
+      clearDirectCheckout();
+    }
 
     router.push("/YourOrders");
   }
@@ -110,11 +123,15 @@ export default function CheckoutPage() {
     <main className="min-h-screen bg-[#fffaf7] px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
         <Link
-          href="/Cart"
+          href={
+            isDirectCheckout && directCheckoutItem
+              ? `/Product/${directCheckoutItem.productId}`
+              : "/Cart"
+          }
           className="inline-flex items-center gap-2 text-sm font-medium text-[#b46c5b] hover:text-[#9e5949]"
         >
           <ArrowLeft size={16} />
-          Back to cart
+          {isDirectCheckout ? "Back to product" : "Back to cart"}
         </Link>
 
         <section className="mt-5 rounded-[28px] border border-[#ecd8d1] bg-white p-6 shadow-sm sm:p-8">
@@ -138,6 +155,12 @@ export default function CheckoutPage() {
               items ready
             </div>
           </div>
+
+          {checkoutMode === "direct" && !directCheckoutItem ? (
+            <div className="mt-6 rounded-2xl border border-[#efd6ce] bg-[#fff6f2] px-4 py-4 text-sm text-[#9e5949]">
+              Your direct checkout item is no longer available in this session. Please return to the product page and tap Rent Now again.
+            </div>
+          ) : null}
 
           <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
             <div className="space-y-6">
@@ -289,7 +312,9 @@ export default function CheckoutPage() {
                                 key={sizeOption}
                                 type="button"
                                 onClick={() =>
-                                  updateCartItem(item.id, { size: sizeOption })
+                                  isDirectCheckout
+                                    ? updateDirectCheckoutItem({ size: sizeOption })
+                                    : updateCartItem(item.id, { size: sizeOption })
                                 }
                                 className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                                   item.size === sizeOption
@@ -304,11 +329,19 @@ export default function CheckoutPage() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => removeFromCart(item.id)}
+                          onClick={() => {
+                            if (isDirectCheckout) {
+                              clearDirectCheckout();
+                              router.push(`/Product/${item.productId}`);
+                              return;
+                            }
+
+                            removeFromCart(item.id);
+                          }}
                           className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-[#b85c50] hover:underline"
                         >
                           <Trash2 size={14} />
-                          Delete
+                          {isDirectCheckout ? "Remove and return" : "Delete"}
                         </button>
                       </div>
                       <div className="text-right text-base font-semibold text-gray-900">

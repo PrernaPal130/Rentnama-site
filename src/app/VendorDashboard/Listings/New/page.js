@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Clapperboard,
   Building2,
   ArrowLeft,
   ArrowRight,
@@ -24,7 +25,11 @@ import {
   buildIndianPhoneNumber,
   PhoneNumberField,
 } from "../../../../components/PhoneNumberField";
-import { uploadVendorListingImage } from "../../../../lib/firebase";
+import {
+  uploadVendorListingClip,
+  uploadVendorListingImage,
+  validateVideoClipDuration,
+} from "../../../../lib/firebase";
 
 export default function NewVendorListingPage() {
   const router = useRouter();
@@ -53,6 +58,8 @@ export default function NewVendorListingPage() {
   });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
+  const [clipFile, setClipFile] = useState(null);
+  const [clipPreview, setClipPreview] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -77,6 +84,32 @@ export default function NewVendorListingPage() {
     setImagePreview(URL.createObjectURL(file));
   }
 
+  async function handleClipChange(event) {
+    const file = event.target.files?.[0];
+
+    setSubmitError("");
+
+    if (!file) {
+      setClipFile(null);
+      setClipPreview("");
+      return;
+    }
+
+    try {
+      await validateVideoClipDuration(file, 30);
+      setClipFile(file);
+      setClipPreview(URL.createObjectURL(file));
+    } catch (error) {
+      setClipFile(null);
+      setClipPreview("");
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "Please choose a short clip up to 30 seconds."
+      );
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setSubmitError("");
@@ -85,6 +118,7 @@ export default function NewVendorListingPage() {
     try {
       const listingId = `LIST-${Date.now().toString().slice(-6)}`;
       let uploadedImage = "";
+      let uploadedClip = "";
 
       if (imageFile) {
         uploadedImage = await uploadVendorListingImage(
@@ -94,10 +128,19 @@ export default function NewVendorListingPage() {
         );
       }
 
+      if (clipFile) {
+        uploadedClip = await uploadVendorListingClip(
+          currentUser?.uid,
+          listingId,
+          clipFile
+        );
+      }
+
       addVendorListing({
         ...formData,
         id: listingId,
         image: uploadedImage,
+        clipUrl: uploadedClip,
         storeContact: buildIndianPhoneNumber(formData.storeContact),
       });
       router.push("/VendorDashboard/Listings");
@@ -513,6 +556,47 @@ export default function NewVendorListingPage() {
                             height={880}
                             className="h-72 w-full object-cover"
                             style={{ objectPosition: "center top" }}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-dashed border-[#e7cfc7] bg-[#fff9f6] p-5">
+                  <div className="flex items-start gap-3">
+                    <Clapperboard size={18} className="mt-1 text-[#b46c5b]" />
+                    <div className="w-full">
+                      <p className="font-semibold text-gray-900">
+                        Product clip
+                      </p>
+                      <p className="mt-1 text-sm text-gray-600">
+                        Add a short outfit clip up to 30 seconds. We keep vendor
+                        clips in higher quality for the product page.
+                      </p>
+
+                      <label className="mt-4 flex cursor-pointer items-center justify-center rounded-2xl border border-[#e4c8c0] bg-white px-4 py-3 text-sm font-medium text-[#a96051] transition hover:bg-[#fff6f2]">
+                        <input
+                          type="file"
+                          accept="video/*"
+                          onChange={handleClipChange}
+                          className="hidden"
+                        />
+                        Choose clip
+                      </label>
+
+                      {clipFile ? (
+                        <p className="mt-3 text-xs text-gray-500">
+                          Selected clip: {clipFile.name}
+                        </p>
+                      ) : null}
+
+                      {clipPreview ? (
+                        <div className="mt-4 overflow-hidden rounded-2xl border border-[#ead6cf] bg-white">
+                          <video
+                            src={clipPreview}
+                            controls
+                            className="h-72 w-full object-cover"
                           />
                         </div>
                       ) : null}

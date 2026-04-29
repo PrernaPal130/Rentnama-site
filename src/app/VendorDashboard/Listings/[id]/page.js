@@ -9,6 +9,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Clapperboard,
   CircleDollarSign,
   Clock3,
   MapPin,
@@ -168,6 +169,22 @@ export default function VendorListingPreviewPage() {
                   style={{ objectPosition: "center 18%" }}
                 />
               </div>
+
+              {listing.clipUrl ? (
+                <div className="mt-5 rounded-[28px] border border-[#ead6cf] bg-white/80 p-4">
+                  <div className="mb-3 flex items-center gap-2 text-[#b46c5b]">
+                    <Clapperboard size={18} />
+                    <p className="text-sm font-semibold text-gray-900">
+                      Listing clip
+                    </p>
+                  </div>
+                  <video
+                    src={listing.clipUrl}
+                    controls
+                    className="h-64 w-full rounded-[22px] object-cover"
+                  />
+                </div>
+              ) : null}
             </div>
 
             <div className="p-6 sm:p-8">

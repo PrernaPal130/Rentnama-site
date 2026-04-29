@@ -18,6 +18,7 @@ import {
   updateProfile,
 } from "firebase/auth";
 import {
+  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -26,6 +27,7 @@ import {
   getFirestore,
   limit,
   query,
+  serverTimestamp,
   setDoc,
   where,
 } from "firebase/firestore";
@@ -61,6 +63,248 @@ const app = firebaseReady
 export const auth = app ? getAuth(app) : null;
 export const db = app ? getFirestore(app) : null;
 export const storage = app ? getStorage(app) : null;
+let ffmpegLoaderPromise = null;
+
+function shouldSkipImageCompression(file) {
+  return (
+    !file?.type?.startsWith("image/") ||
+    file.type === "image/gif" ||
+    file.type === "image/svg+xml"
+  );
+}
+
+function readImageDimensions(file) {
+  return new Promise((resolve, reject) => {
+    const imageUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      const dimensions = {
+        width: image.naturalWidth || image.width,
+        height: image.naturalHeight || image.height,
+      };
+      URL.revokeObjectURL(imageUrl);
+      resolve(dimensions);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(imageUrl);
+      reject(new Error("We could not process this image."));
+    };
+
+    image.src = imageUrl;
+  });
+}
+
+async function compressImageFile(
+  file,
+  { maxDimension = 1600, quality = 0.82, outputMimeType = "image/webp" } = {}
+) {
+  if (typeof window === "undefined" || shouldSkipImageCompression(file)) {
+    return {
+      file,
+      extension: file?.name?.split(".").pop()?.toLowerCase() || "jpg",
+      mimeType: file?.type || "image/jpeg",
+    };
+  }
+
+  const { width, height } = await readImageDimensions(file);
+  const scale = Math.min(1, maxDimension / Math.max(width, height));
+  const nextWidth = Math.max(1, Math.round(width * scale));
+  const nextHeight = Math.max(1, Math.round(height * scale));
+
+  const imageUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const nextImage = new Image();
+      nextImage.onload = () => resolve(nextImage);
+      nextImage.onerror = () =>
+        reject(new Error("We could not process this image."));
+      nextImage.src = imageUrl;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = nextWidth;
+    canvas.height = nextHeight;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("Image compression is not available right now.");
+    }
+
+    context.drawImage(image, 0, 0, nextWidth, nextHeight);
+
+    const compressedBlob = await new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error("We could not compress this image."));
+            return;
+          }
+
+          resolve(blob);
+        },
+        outputMimeType,
+        quality
+      );
+    });
+
+    const compressedFile = new File(
+      [compressedBlob],
+      `${file.name.replace(/\.[^.]+$/, "")}.webp`,
+      {
+        type: outputMimeType,
+        lastModified: Date.now(),
+      }
+    );
+
+    return {
+      file: compressedFile,
+      extension: "webp",
+      mimeType: outputMimeType,
+    };
+  } finally {
+    URL.revokeObjectURL(imageUrl);
+  }
+}
+
+async function getBrowserFFmpeg() {
+  if (typeof window === "undefined") {
+    throw new Error("Video compression is only available in the browser.");
+  }
+
+  if (!ffmpegLoaderPromise) {
+    ffmpegLoaderPromise = (async () => {
+      const [{ FFmpeg }, { fetchFile, toBlobURL }] = await Promise.all([
+        import("@ffmpeg/ffmpeg"),
+        import("@ffmpeg/util"),
+      ]);
+      const ffmpeg = new FFmpeg();
+      const baseUrl = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm";
+      const coreURL = await toBlobURL(
+        `${baseUrl}/ffmpeg-core.js`,
+        "text/javascript"
+      );
+      const wasmURL = await toBlobURL(
+        `${baseUrl}/ffmpeg-core.wasm`,
+        "application/wasm"
+      );
+
+      await ffmpeg.load({ coreURL, wasmURL });
+      return { ffmpeg, fetchFile };
+    })();
+  }
+
+  return ffmpegLoaderPromise;
+}
+
+async function compressVideoFile(
+  file,
+  {
+    maxWidth = 960,
+    videoBitrate = "900k",
+    audioBitrate = "96k",
+    crf = "32",
+  } = {}
+) {
+  if (typeof window === "undefined" || !file?.type?.startsWith("video/")) {
+    return {
+      file,
+      extension: file?.name?.split(".").pop()?.toLowerCase() || "mp4",
+      mimeType: file?.type || "video/mp4",
+    };
+  }
+
+  try {
+    const { ffmpeg, fetchFile } = await getBrowserFFmpeg();
+    const inputName = `input-${Date.now()}.${file.name?.split(".").pop()?.toLowerCase() || "mp4"}`;
+    const outputName = `output-${Date.now()}.mp4`;
+
+    await ffmpeg.writeFile(inputName, await fetchFile(file));
+    await ffmpeg.exec([
+      "-i",
+      inputName,
+      "-vf",
+      `scale='min(${maxWidth},iw)':-2`,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      crf,
+      "-b:v",
+      videoBitrate,
+      "-c:a",
+      "aac",
+      "-b:a",
+      audioBitrate,
+      "-movflags",
+      "faststart",
+      outputName,
+    ]);
+
+    const compressedData = await ffmpeg.readFile(outputName);
+    const bytes =
+      compressedData instanceof Uint8Array
+        ? compressedData
+        : new Uint8Array(compressedData);
+    const compressedFile = new File([bytes], `${file.name.replace(/\.[^.]+$/, "")}.mp4`, {
+      type: "video/mp4",
+      lastModified: Date.now(),
+    });
+
+    try {
+      await ffmpeg.deleteFile(inputName);
+      await ffmpeg.deleteFile(outputName);
+    } catch {}
+
+    return {
+      file: compressedFile,
+      extension: "mp4",
+      mimeType: "video/mp4",
+    };
+  } catch (error) {
+    console.warn("Video compression fell back to the original upload.", error);
+    return {
+      file,
+      extension: file.name?.split(".").pop()?.toLowerCase() || "mp4",
+      mimeType: file.type || "video/mp4",
+    };
+  }
+}
+
+export async function validateVideoClipDuration(file, maxSeconds = 30) {
+  if (typeof window === "undefined" || !file) {
+    return 0;
+  }
+
+  if (!file.type?.startsWith("video/")) {
+    throw new Error("Please choose a video file for the clip.");
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const duration = await new Promise((resolve, reject) => {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.onloadedmetadata = () => resolve(Number(video.duration) || 0);
+      video.onerror = () =>
+        reject(new Error("We could not read that video file. Please try another one."));
+      video.src = objectUrl;
+    });
+
+    if (duration > maxSeconds) {
+      throw new Error(`Please upload a clip that is ${maxSeconds} seconds or shorter.`);
+    }
+
+    return duration;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
 
 function friendlyAuthErrorMessage(error) {
   switch (error?.code) {
@@ -124,6 +368,14 @@ function vendorDataDoc(uid) {
 
 function publicProductDoc(productId) {
   return doc(db, "publicProducts", productId);
+}
+
+function productReviewsCollection() {
+  return collection(db, "productReviews");
+}
+
+function protectedShopDetailsDoc(shopKey) {
+  return doc(db, "protectedShopDetails", shopKey);
 }
 
 export function subscribeToAuth(handler) {
@@ -661,6 +913,36 @@ export async function deletePublicProductFromFirestore(productId) {
   }
 }
 
+export async function loadProtectedShopDetails(shopKey) {
+  if (!db || !shopKey) {
+    return null;
+  }
+
+  try {
+    const snapshot = await getDoc(protectedShopDetailsDoc(shopKey));
+    return snapshot.exists() ? snapshot.data() : null;
+  } catch (error) {
+    if (!isFirestoreOfflineError(error)) {
+      console.error("Failed to load protected shop details", error);
+    }
+    return null;
+  }
+}
+
+export async function saveProtectedShopDetails(shopKey, details) {
+  if (!db || !shopKey) {
+    return;
+  }
+
+  try {
+    await setDoc(protectedShopDetailsDoc(shopKey), details, { merge: true });
+  } catch (error) {
+    if (!isFirestoreOfflineError(error)) {
+      console.error("Failed to save protected shop details", error);
+    }
+  }
+}
+
 export async function uploadVendorListingImage(uid, listingId, file) {
   if (!storage) {
     throw new Error("Firebase Storage is not configured yet.");
@@ -671,20 +953,165 @@ export async function uploadVendorListingImage(uid, listingId, file) {
   }
 
   try {
-    const extension = file.name?.split(".").pop()?.toLowerCase() || "jpg";
+    const preparedUpload = await compressImageFile(file, {
+      maxDimension: 1900,
+      quality: 0.9,
+    });
     const imageRef = ref(
       storage,
-      `vendor-listings/${uid}/${listingId}.${extension}`
+      `vendor-listings/${uid}/${listingId}.${preparedUpload.extension}`
     );
 
-    await uploadBytes(imageRef, file, {
-      contentType: file.type || "image/jpeg",
+    await uploadBytes(imageRef, preparedUpload.file, {
+      contentType: preparedUpload.mimeType,
     });
 
     return await getDownloadURL(imageRef);
   } catch (error) {
     throw new Error(
       error?.message || "We could not upload the listing image right now."
+    );
+  }
+}
+
+export async function uploadVendorListingClip(uid, listingId, file) {
+  if (!storage) {
+    throw new Error("Firebase Storage is not configured yet.");
+  }
+
+  if (!uid || !listingId || !file) {
+    throw new Error("Listing clip upload needs a vendor, listing, and file.");
+  }
+
+  try {
+    await validateVideoClipDuration(file, 30);
+    const preparedUpload = await compressVideoFile(file, {
+      maxWidth: 1280,
+      videoBitrate: "1200k",
+      audioBitrate: "96k",
+      crf: "29",
+    });
+    const clipRef = ref(
+      storage,
+      `vendor-listings/${uid}/clips/${listingId}.${preparedUpload.extension}`
+    );
+
+    await uploadBytes(clipRef, preparedUpload.file, {
+      contentType: preparedUpload.mimeType,
+    });
+
+    return await getDownloadURL(clipRef);
+  } catch (error) {
+    throw new Error(
+      error?.message || "We could not upload the listing clip right now."
+    );
+  }
+}
+
+export async function uploadReviewMedia(productId, uid, file, mediaType = "image") {
+  if (!storage) {
+    throw new Error("Firebase Storage is not configured yet.");
+  }
+
+  if (!productId || !uid || !file) {
+    throw new Error("Review media upload needs a product, user, and file.");
+  }
+
+  try {
+    const safeType = mediaType === "video" ? "video" : "image";
+    if (safeType === "video") {
+      await validateVideoClipDuration(file, 30);
+    }
+    const preparedUpload =
+      safeType === "image"
+        ? await compressImageFile(file, {
+            maxDimension: 1280,
+            quality: 0.68,
+          })
+        : await compressVideoFile(file);
+    const fileRef = ref(
+      storage,
+      `review-media/${productId}/${uid}/${safeType}-${Date.now()}.${preparedUpload.extension}`
+    );
+
+    await uploadBytes(fileRef, preparedUpload.file, {
+      contentType: preparedUpload.mimeType,
+    });
+
+    return await getDownloadURL(fileRef);
+  } catch (error) {
+    throw new Error(
+      error?.message || "We could not upload the review media right now."
+    );
+  }
+}
+
+export async function loadProductReviews(productId) {
+  if (!db || !productId) {
+    return [];
+  }
+
+  try {
+    const reviewsQuery = query(
+      productReviewsCollection(),
+      where("productId", "==", productId)
+    );
+    const snapshot = await getDocs(reviewsQuery);
+
+    return snapshot.docs
+      .map((item) => ({
+        id: item.id,
+        ...item.data(),
+      }))
+      .sort((left, right) => {
+        const leftTime =
+          left.createdAt?.toDate?.()?.getTime?.() ||
+          new Date(left.createdAt || 0).getTime() ||
+          0;
+        const rightTime =
+          right.createdAt?.toDate?.()?.getTime?.() ||
+          new Date(right.createdAt || 0).getTime() ||
+          0;
+
+        return rightTime - leftTime;
+      });
+  } catch (error) {
+    if (!isFirestoreOfflineError(error)) {
+      console.error("Failed to load product reviews from Firestore", error);
+    }
+    return [];
+  }
+}
+
+export async function createProductReview(reviewInput) {
+  if (!db) {
+    throw new Error("Firebase is not configured yet.");
+  }
+
+  const payload = {
+    productId: reviewInput.productId,
+    userId: reviewInput.userId,
+    userName: reviewInput.userName || "RentNama Customer",
+    rating: Number(reviewInput.rating) || 0,
+    comment: reviewInput.comment || "",
+    imageUrls: reviewInput.imageUrls || [],
+    videoUrls: reviewInput.videoUrls || [],
+    verifiedRental: Boolean(reviewInput.verifiedRental),
+    status: reviewInput.status || "published",
+    createdAt: serverTimestamp(),
+  };
+
+  try {
+    const reviewRef = await addDoc(productReviewsCollection(), payload);
+
+    return {
+      id: reviewRef.id,
+      ...payload,
+      createdAt: new Date(),
+    };
+  } catch (error) {
+    throw new Error(
+      error?.message || "We could not save the review right now."
     );
   }
 }

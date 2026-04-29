@@ -10,6 +10,7 @@ import {
   Ruler,
   Package,
   LogOut,
+  Store,
 } from "lucide-react";
 import { useAuthData } from "../../context/authContext";
 
@@ -60,6 +61,12 @@ export default function AccountPage() {
       subtitle: "Save your sizes",
       href: "#",
       icon: <Ruler className="w-8 h-8" />,
+    },
+    {
+      title: "Store Access Pass",
+      subtitle: "Unlock more boutique visits and shop details",
+      href: "/StoreAccessUpgrade",
+      icon: <Store className="w-8 h-8" />,
     },
   ];
 
