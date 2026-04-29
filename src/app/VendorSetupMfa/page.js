@@ -31,9 +31,13 @@ function VendorSetupMfaInner() {
   const [info, setInfo] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isCheckingPassword, setIsCheckingPassword] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [needsPasswordRefresh, setNeedsPasswordRefresh] = useState(false);
+  const [passwordVerified, setPasswordVerified] = useState(false);
+  const [hasSentOtp, setHasSentOtp] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(0);
 
   const phoneNumber = (profile?.phoneNumber || "").replace(/\s+/g, "");
   const hasEnrolledFactor =
@@ -76,9 +80,74 @@ function VendorSetupMfaInner() {
     }
   }, [hasEnrolledFactor, router]);
 
+  useEffect(() => {
+    if (resendCountdown <= 0) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      setResendCountdown((current) => {
+        if (current <= 1) {
+          window.clearInterval(timer);
+          return 0;
+        }
+
+        return current - 1;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [resendCountdown]);
+
+  function formatCountdown(totalSeconds) {
+    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+    const seconds = String(totalSeconds % 60).padStart(2, "0");
+    return `${minutes}:${seconds}`;
+  }
+
+  async function handleVerifyPassword() {
+    if (!currentUser) {
+      setError("Vendor session is not active right now.");
+      return;
+    }
+
+    if (!confirmPassword) {
+      setError("Enter your vendor password first.");
+      return;
+    }
+
+    try {
+      setIsCheckingPassword(true);
+      setError("");
+      setInfo("");
+      await reauthenticateVendorForMfa(currentUser, confirmPassword);
+      setPasswordVerified(true);
+      setNeedsPasswordRefresh(false);
+      setInfo("Password verified. You can now send the OTP.");
+    } catch (passwordError) {
+      setPasswordVerified(false);
+      setError(
+        passwordError instanceof Error
+          ? passwordError.message
+          : "We could not verify your vendor password right now."
+      );
+    } finally {
+      setIsCheckingPassword(false);
+    }
+  }
+
   async function handleSendOtp() {
     if (!currentUser || !phoneNumber) {
       setError("Vendor phone number is not ready yet.");
+      return;
+    }
+
+    if (!passwordVerified) {
+      setError("Verify your vendor password first before sending OTP.");
+      return;
+    }
+
+    if (hasSentOtp && resendCountdown > 0) {
       return;
     }
 
@@ -93,6 +162,8 @@ function VendorSetupMfaInner() {
         verifier
       );
       setVerificationId(nextVerificationId);
+      setHasSentOtp(true);
+      setResendCountdown(300);
       setInfo("OTP sent to your registered phone number.");
     } catch (sendError) {
       setError(sendError.message || "Unable to send OTP right now.");
@@ -135,6 +206,7 @@ function VendorSetupMfaInner() {
         nextMessage.toLowerCase().includes("recent")
       ) {
         setNeedsPasswordRefresh(true);
+        setPasswordVerified(false);
       }
       setError(nextMessage);
     } finally {
@@ -224,6 +296,43 @@ function VendorSetupMfaInner() {
               </button>
 
               <form onSubmit={handleVerifyOtp} className="mt-6 space-y-5">
+                <div className="space-y-3">
+                  <label className="mb-2 block text-sm font-medium text-[#4e433e]">
+                    Confirm vendor password
+                  </label>
+                  <div className="flex gap-3">
+                    <div className="relative flex-1">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter your password again"
+                        value={confirmPassword}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                        className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 pr-12 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((current) => !current)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8f756d]"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleVerifyPassword}
+                      disabled={isCheckingPassword || !confirmPassword}
+                      className="rounded-full border border-[#e4c8c0] bg-white px-5 py-3 text-sm font-semibold text-gray-700 transition hover:bg-[#fff6f2] disabled:cursor-not-allowed disabled:text-gray-400"
+                    >
+                      {isCheckingPassword ? "Verifying..." : "Verify password"}
+                    </button>
+                  </div>
+                  <p className="text-xs leading-5 text-[#7b6660]">
+                    Verify the password first. If Firebase later asks for a fresh secure
+                    session again, just verify the password here once more.
+                  </p>
+                </div>
+
                 <div>
                   <label className="mb-2 block text-sm font-medium text-[#4e433e]">
                     OTP
@@ -238,32 +347,32 @@ function VendorSetupMfaInner() {
                   />
                 </div>
 
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-[#4e433e]">
-                    Confirm vendor password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Enter your password again"
-                      value={confirmPassword}
-                      onChange={(event) => setConfirmPassword(event.target.value)}
-                      required={needsPasswordRefresh}
-                      className="w-full rounded-2xl border border-[#e6d3cb] bg-[#fffdfc] px-4 py-3.5 pr-12 text-[#2f2622] outline-none transition focus:border-[#d88b76] focus:ring-4 focus:ring-[#f4dfd7]"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((current) => !current)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8f756d]"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                    >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                  <p className="mt-2 text-xs leading-5 text-[#7b6660]">
-                    Keep this ready in case Firebase asks for a fresh secure session before finishing OTP enrollment.
+                <button
+                  type="button"
+                  onClick={handleSendOtp}
+                  disabled={
+                    isSending ||
+                    !phoneNumber ||
+                    !passwordVerified ||
+                    (hasSentOtp && resendCountdown > 0)
+                  }
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#c97762] py-3.5 text-sm font-semibold text-white transition hover:bg-[#b96954] disabled:cursor-not-allowed disabled:bg-[#d6a89c]"
+                >
+                  {isSending
+                    ? "Sending OTP..."
+                    : hasSentOtp
+                    ? "Resend OTP"
+                    : "Send OTP"}
+                  <ArrowRight size={16} />
+                </button>
+
+                {hasSentOtp ? (
+                  <p className="text-center text-xs text-[#7b6660]">
+                    {resendCountdown > 0
+                      ? `You can resend OTP after ${formatCountdown(resendCountdown)}`
+                      : "You can now resend OTP if needed."}
                   </p>
-                </div>
+                ) : null}
 
                 <button
                   type="submit"
