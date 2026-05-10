@@ -126,6 +126,19 @@ export default function Navbar() {
                 <User className="w-4 h-4 sm:w-5 sm:h-5 text-black cursor-pointer" />
               </Link>
             </div>
+                   <button 
+    onClick={() => router.push("/LoginSign")}
+    className="text-xs font-medium hover:text-gray-600 transition-colors"
+  >
+    Login
+  </button>
+  <button 
+    onClick={() => router.push("/Signup")}
+    className="bg-black text-white px-4 py-1.5 rounded-full text-xs font-medium hover:bg-gray-800 transition-all"
+  >
+    Sign Up
+  </button>
+</div>
 
             {/* Mobile Menu */}
             <button
